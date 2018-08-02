@@ -83,8 +83,22 @@ bool initialize (IChannel_t* channel)
         return (false);
     }
     gpLsc_Dwnld_Context->mchannel = channel;
+    if((channel != NULL) &&
+       (channel->open) != NULL)
+    {
+      if(channel->open() == STATUS_FAILED)
+      {
+        ALOGD ("%s: exit : channle open failed", fn);
+        return false;
+      }
+    }
+    else
+    {
+      ALOGD ("%s: exit : channel null", fn);
+      return false;
+    }
     mIsInit = true;
-    ALOGD ("%s: exit", fn);
+    ALOGD ("%s: exit : success", fn);
     return (true);
 }
 
@@ -189,7 +203,6 @@ tLSC_STATUS LSC_update_seq_handler(
       ALOGE("%s: exiting; status=0x0%X", fn, status);
       break;
     }
-    usleep(2*1000*1000);
     seq_counter++;
   }
 
@@ -266,7 +279,7 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
   tLSC_STATUS transStat = STATUS_FAILED;
   phNxpLs_data cmdApdu;
   phNxpLs_data rspApdu;
-  uint8_t selectCnt = 3;
+  unsigned long semsPresent = 1;
 
   if (Os_info == NULL || pTranscv_Info == NULL) {
     ALOGD("%s: Invalid parameter", fn);
@@ -274,74 +287,73 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     phLS_memset(&cmdApdu, 0x00, sizeof(phNxpLs_data));
     phLS_memset(&rspApdu, 0x00, sizeof(phNxpLs_data));
 
-  if (ArrayOfAIDs[LS_SELF_UPDATE_AID_IDX][0] == 0x00) {
-    /*If there was no self update, start from next valid LS AID*/
-    selectCnt--;
+  GetNxpNumValue(NAME_NXP_SEMS_SUPPORTED, &semsPresent, sizeof(semsPresent));
+
+  if(semsPresent)
+  {
+    cmdApdu.len = (int32_t)(sizeof(SelectSEMS) + 1);
+    cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+    cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
+    memcpy(&(cmdApdu.p_data[1]), SelectSEMS, sizeof(SelectSEMS));
   }
-    while ((selectCnt--) > 0) {
+  else
+  {
+    /*p_data will have channel_id (1 byte) + SelectLsc APDU*/
+    cmdApdu.len = (int32_t)(sizeof(SelectLsc) + 1);
+    cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+    cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
+    memcpy(&(cmdApdu.p_data[1]), SelectLsc, sizeof(SelectLsc));
+  }
+  ALOGD("%s: Calling Secure Element Transceive with Loader service AID", fn);
 
-      cmdApdu.p_data = (uint8_t*)phLS_memalloc(
-        ((ArrayOfAIDs[selectCnt][0]) - 1) * sizeof(uint8_t));
-      cmdApdu.len = (int32_t)ArrayOfAIDs[selectCnt][0];
+  transStat = LSC_Transceive(&cmdApdu, &rspApdu);
 
+  if (transStat != STATUS_SUCCESS && (rspApdu.len == 0x00)) {
+    status = STATUS_FAILED;
+    ALOGE("%s: SE transceive failed status = 0x%X", fn, status);
+  } else if (((rspApdu.p_data[rspApdu.len - 2] == 0x90) &&
+                  (rspApdu.p_data[rspApdu.len - 1] == 0x00))) {
+    status = Process_SelectRsp(rspApdu.p_data, (rspApdu.len - 2));
+    if (status != STATUS_OK) {
+      ALOGE("%s: Select Lsc Rsp doesnt have a valid key; status = 0x%X", fn,
+        status);
+    }
+    } else if (((rspApdu.p_data[rspApdu.len - 2] != 0x90))) {
+    /*Copy the response SW in failure case*/
+    memcpy(&lsExecuteResp[2], &(rspApdu.p_data[rspApdu.len - 2]), 2);
+    }
+    else {
+    status = STATUS_FAILED;
+    }
+    if(status == STATUS_FAILED && semsPresent)
+    {
+      phLS_free(cmdApdu.p_data);
+      cmdApdu.len = (int32_t)(sizeof(SelectSEMSUpdater) + 1);
+      cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
       cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
-
-      memcpy(&(cmdApdu.p_data[1]), &ArrayOfAIDs[selectCnt][2],
-             ((ArrayOfAIDs[selectCnt][0]) - 1));
-
-      /*If NFC/SPI Deinitialize requested*/
-      ALOGD("%s: Calling Secure Element Transceive with Loader service AID",
-            fn);
-
+      memcpy(&(cmdApdu.p_data[1]), SelectSEMSUpdater, sizeof(SelectSEMSUpdater));
       transStat = LSC_Transceive(&cmdApdu, &rspApdu);
 
       if (transStat != STATUS_SUCCESS && (rspApdu.len == 0x00)) {
         status = STATUS_FAILED;
         ALOGE("%s: SE transceive failed status = 0x%X", fn, status);
-        break;
       } else if (((rspApdu.p_data[rspApdu.len - 2] == 0x90) &&
-                  (rspApdu.p_data[rspApdu.len - 1] == 0x00))) {
+                      (rspApdu.p_data[rspApdu.len - 1] == 0x00))) {
         status = Process_SelectRsp(rspApdu.p_data, (rspApdu.len - 2));
         if (status != STATUS_OK) {
           ALOGE("%s: Select Lsc Rsp doesnt have a valid key; status = 0x%X", fn,
-                status);
-        }
-        /*If AID is found which is successfully selected break while loop*/
-        if (status == STATUS_OK) {
-          uint8_t totalLen = ArrayOfAIDs[selectCnt][0];
-          uint8_t cnt = 0;
-          int32_t wStatus = 0;
-          status = STATUS_FAILED;
-
-          fAID_MEM = fopen(AID_MEM_PATH, "w+");
-
-          if (fAID_MEM == NULL) {
-            ALOGE("Error opening AID data file for writing: %s",
-                  strerror(errno));
-            phLS_free(cmdApdu.p_data);
-            return status;
+            status);
           }
-          while (cnt <= totalLen) {
-            wStatus = fprintf(fAID_MEM, "%02x", ArrayOfAIDs[selectCnt][cnt++]);
-            if (wStatus != 2) {
-              ALOGE("%s: Error writing AID data to AID_MEM file: %s", fn,
-                    strerror(errno));
-              break;
-            }
-          }
-          if (wStatus == 2) status = STATUS_OK;
-          fclose(fAID_MEM);
-          break;
+        } else if (((rspApdu.p_data[rspApdu.len - 2] != 0x90))) {
+          /*Copy the response SW in failure case*/
+          memcpy(&lsExecuteResp[2], &(rspApdu.p_data[rspApdu.len - 2]), 2);
         }
-      } else if (((rspApdu.p_data[rspApdu.len - 2] != 0x90))) {
-        /*Copy the response SW in failure case*/
-        memcpy(&lsExecuteResp[2], &(rspApdu.p_data[rspApdu.len - 2]), 2);
-      } else {
+        else {
         status = STATUS_FAILED;
       }
     }
+    phLS_free(cmdApdu.p_data);
   }
-  phLS_free(cmdApdu.p_data);
   ALOGE("%s: exit; status=0x%x", fn, status);
   return status;
 }
@@ -426,7 +438,7 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     Os_info->fResp = fopen(Os_info->fls_RespPath, "a+");
     if (Os_info->fResp == NULL) {
       ALOGE("Error opening response recording file <%s> for reading: %s",
-            Os_info->fls_path, strerror(errno));
+            Os_info->fls_RespPath, strerror(errno));
       return status;
     }
     ALOGD("%s: Response OUT FILE path is successfully created", fn);
@@ -588,7 +600,6 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
       status = STATUS_FAILED;
       break;
     }
-    usleep(2*1000*1000);
   }
   if (Os_info->bytes_wrote == 0xAA) {
     fclose(Os_info->fResp);
@@ -731,11 +742,40 @@ tLSC_STATUS LSC_ReadScript(Lsc_ImageInfo_t* Os_info, uint8_t* read_buf) {
   int wResult = 0;
   tLSC_STATUS status = STATUS_FAILED;
   int32_t lenOff = 1;
+  bool isMetaDatapresent = false;
 
   ALOGD("%s: enter", fn);
 
   for (wCount = 0; (wCount < 2 && !feof(Os_info->fp)); wCount++, wIndex++) {
     wResult = FSCANF_BYTE(Os_info->fp, "%2X", (unsigned int*)&read_buf[wIndex]);
+
+    if(wResult == 0)
+    {
+      char metaString[MAX_META_STRING_SIZE];
+      char *ptr = fgets(metaString, sizeof(metaString), Os_info->fp);
+      if(ptr != NULL)
+      {
+        isMetaDatapresent = true;
+        ALOGD("MetaData = %s",ptr);
+        wCount = 0;
+        wIndex = 0;
+      }
+      else
+      {
+         break;
+      }
+    }
+    else
+    {
+      if(isMetaDatapresent)
+      {
+        isMetaDatapresent = false;
+        wCount = 0;
+        wIndex = 0;
+        read_buf[0] = read_buf[1];
+        ALOGD("End of MetaData");
+      }
+    }
   }
   if (wResult == 0) return STATUS_FAILED;
 

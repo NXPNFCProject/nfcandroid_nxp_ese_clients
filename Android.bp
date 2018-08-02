@@ -85,5 +85,6 @@ cc_library_shared {
         "libchrome",
         "libdl",
         "libhidlbase",
+        "se_extn_client"
     ],
 }

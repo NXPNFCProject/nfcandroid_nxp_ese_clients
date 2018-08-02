@@ -62,9 +62,9 @@ uint8_t checkeSEClientRequired( ) {
   uint8_t status = SESTATUS_FAILED;
   unsigned long int num;
   bool isApduPresent = true;
-  bool isSystemImgUpdated = true;
+  bool isSystemImgUpdated = false;
   bool isLsScriptPresent = true;
-  bool isFirstLsUpdate = true;
+  bool isFirstLsUpdate = false;
   struct stat st;
 
   LOG(ERROR) <<"Check_HalStart_Entry: enter:  ";
@@ -90,7 +90,7 @@ uint8_t checkeSEClientRequired( ) {
   /*Check if system image is updated*/
   if(stat(isSystemImgInfo, &st))
   {
-    isSystemImgUpdated = false;
+      isSystemImgUpdated = true;
   }
   /*Check if LS script present*/
   if(stat(lsUpdateBackupPath, &st))
@@ -100,7 +100,7 @@ uint8_t checkeSEClientRequired( ) {
   /*Check if it is first time LS update*/
   if(stat(isFirstTimeLsUpdate, &st))
   {
-	  isFirstLsUpdate = false;
+	  isFirstLsUpdate = true;
   }
 
   if(GetNxpNumValue(NAME_NXP_P61_JCOP_DEFAULT_INTERFACE, &num, sizeof(num))) {
@@ -123,7 +123,7 @@ uint8_t checkeSEClientRequired( ) {
   }
   else
   {
-	  LOG(ERROR) <<"Jcop update not required  ";
+    LOG(ERROR) <<"Jcop update not required  ";
     seExtn.isJcopUpdateRequired = false;
   }
 
