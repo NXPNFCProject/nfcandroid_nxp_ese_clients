@@ -13,4 +13,4 @@ This Repo contains any additional information/files required to support the rele
 | Android Version        | NXP Release          | NXP Tag  |
 | :-------------: |:-------------:| :-----:|
 | android-p-preview 2               |  9.00.08 (SN100x) |  NFC_NCIHALx_AR2000.09.00.08_OpnSrc |
-
+| android-p-preview 2               |  9.00.0A (SN100x) |  NFC_NCIHALx_AR2000.09.00.0A_OpnSrc |
