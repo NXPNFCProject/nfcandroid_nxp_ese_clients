@@ -135,8 +135,8 @@ static uint8_t ArrayOfAIDs[NOOFAIDS][LENOFAIDS] = {
 
 #define LS_ABORT_SW1 0x69
 #define LS_ABORT_SW2 0x87
-#define AID_MEM_PATH "/data/vendor/secure_element/AID_MEM.txt"
-#define LS_STATUS_PATH "/data/vendor/secure_element/LS_Status.txt"
+//#define AID_MEM_PATH "/data/vendor/secure_element/AID_MEM.txt"
+//#define LS_STATUS_PATH "/data/vendor/secure_element/LS_Status.txt"
 #define LS_SRC_BACKUP "/data/vendor/secure_element/LS_Src_Backup.txt"
 #define LS_DST_BACKUP "/data/vendor/secure_element/LS_Dst_Backup.txt"
 #define MAX_CERT_LEN (255 + 137)
@@ -173,6 +173,10 @@ static uint8_t ArrayOfAIDs[NOOFAIDS][LENOFAIDS] = {
 #define STORE_DATA_INS 0xE2
 #define STORE_DATA_LEN 32
 #define STORE_DATA_TAG 0x4F
+static const char *AID_MEM_PATH[2] = {"/data/vendor/nfc/AID_MEM.txt",
+                                  "/data/vendor/secure_element/AID_MEM.txt"};
+static const char *LS_STATUS_PATH[2] = {"/data/vendor/nfc/LS_Status.txt",
+                                  "/data/vendor/secure_element/LS_Status.txt"};
 
 /*******************************************************************************
 **

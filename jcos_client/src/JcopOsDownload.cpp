@@ -46,12 +46,14 @@ tJBL_STATUS (JcopOsDwnld::*JcopOs_dwnld_seqhandler[])(
    };
 
 pJcopOs_Dwnld_Context_t gpJcopOs_Dwnld_Context = NULL;
-static const char *path[3] = {"/data/vendor/nfc/JcopOs_Update1.apdu",
-                             "/data/vendor/nfc/JcopOs_Update2.apdu",
-                             "/data/vendor/nfc/JcopOs_Update3.apdu"};
+static const char *path[3] = {"/vendor/etc/JcopOs_Update1.apdu",
+                             "/vendor/etc/JcopOs_Update2.apdu",
+                             "/vendor/etc/JcopOs_Update3.apdu"};
+static const char *JCOP_INFO_PATH[2] = {"/data/vendor/nfc/jcop_info.txt",
+                            "/data/vendor/secure_element/jcop_info.txt"};
 
-static const char *uai_path[2] = {"/data/vendor/nfc/cci.jcsh",
-                                  "/data/vendor/nfc/jci.jcsh"};
+static const char *uai_path[2] = {"/vendor/etc/cci.jcsh",
+                                  "/vendor/etc/jci.jcsh"};
 
 inline int FSCANF_BYTE(FILE *stream, const char *format, void* pVal)
 {
@@ -413,7 +415,7 @@ tJBL_STATUS JcopOsDwnld::SendUAICmds(JcopOs_ImageInfo_t* Os_info, tJBL_STATUS st
     }
     for(i = 0; i < 2; i++)
     {
-        Os_info->fp = fopen(uai_path[i], "r+");
+        Os_info->fp = fopen(uai_path[i], "r");
         if (Os_info->fp == NULL) {
             LOG(ERROR) << StringPrintf("Error opening CCI file <%s> for reading: %s",
                         Os_info->fls_path, strerror(errno));
@@ -736,7 +738,7 @@ tJBL_STATUS JcopOsDwnld::load_JcopOS_image(JcopOs_ImageInfo_t *Os_info, tJBL_STA
         LOG(ERROR) << StringPrintf("%s: invalid parameter", fn);
         return status;
     }
-    Os_info->fp = fopen(Os_info->fls_path, "r+");
+    Os_info->fp = fopen(Os_info->fls_path, "r");
 
     if (Os_info->fp == NULL) {
         LOG(ERROR) << StringPrintf("Error opening OS image file <%s> for reading: %s",
@@ -881,21 +883,23 @@ tJBL_STATUS JcopOsDwnld::GetJcopOsState(JcopOs_ImageInfo_t *Os_info, uint8_t *co
     uint8_t xx=0;
     DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("%s: enter", fn);
+    IChannel_t *mchannel = gpJcopOs_Dwnld_Context->channel;
     if(Os_info == NULL)
     {
         LOG(ERROR) << StringPrintf("%s: invalid parameter", fn);
         return STATUS_FAILED;
     }
-    fp = fopen(JCOP_INFO_PATH, "r");
+    fp = fopen(JCOP_INFO_PATH[mchannel->getInterfaceInfo()], "r");
+
 
     if (fp == NULL) {
         LOG(ERROR) << StringPrintf("file <%s> not exits for reading- creating new file: %s",
-                JCOP_INFO_PATH, strerror(errno));
-        fp = fopen(JCOP_INFO_PATH, "w+");
+                JCOP_INFO_PATH[mchannel->getInterfaceInfo()], strerror(errno));
+        fp = fopen(JCOP_INFO_PATH[mchannel->getInterfaceInfo()], "w+");
         if (fp == NULL)
         {
             LOG(ERROR) << StringPrintf("Error opening OS image file <%s> for reading: %s",
-                    JCOP_INFO_PATH, strerror(errno));
+              JCOP_INFO_PATH[mchannel->getInterfaceInfo()], strerror(errno));
             return STATUS_FAILED;
         }
         fprintf(fp, "%u", xx);
@@ -959,16 +963,17 @@ tJBL_STATUS JcopOsDwnld::SetJcopOsState(JcopOs_ImageInfo_t *Os_info, uint8_t sta
     FILE *fp;
     DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("%s: enter", fn);
+    IChannel_t *mchannel = gpJcopOs_Dwnld_Context->channel;
     if(Os_info == NULL)
     {
         LOG(ERROR) << StringPrintf("%s: invalid parameter", fn);
         return status;
     }
-    fp = fopen(JCOP_INFO_PATH, "w");
+    fp = fopen(JCOP_INFO_PATH[mchannel->getInterfaceInfo()], "w");
 
     if (fp == NULL) {
-        LOG(ERROR) << StringPrintf("Error opening OS image file <%s> for reading: %s",
-                JCOP_INFO_PATH, strerror(errno));
+      LOG(ERROR) << StringPrintf("Error opening OS image file <%s> for reading: %s",
+        JCOP_INFO_PATH[mchannel->getInterfaceInfo()], strerror(errno));
     }
     else
     {

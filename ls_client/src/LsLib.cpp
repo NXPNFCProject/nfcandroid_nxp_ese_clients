@@ -1142,7 +1142,8 @@ tLSC_STATUS LSC_ProcessResp(Lsc_ImageInfo_t* image_info, int32_t recvlen,
     //memcpy(&ArrayOfAIDs[2][0], &AID_ARRAY[0], recvlen + 4);
     memcpy(&ArrayOfAIDs[LS_SELF_UPDATE_AID_IDX][0], &AID_ARRAY[0], recvlen + 4);
 
-    fAID_MEM = fopen(AID_MEM_PATH, "w");
+    fAID_MEM = fopen(AID_MEM_PATH[gpLsc_Dwnld_Context->
+      mchannel->getInterfaceInfo()], "w");
 
     if (fAID_MEM == NULL) {
       ALOGE("Error opening AID data for writing: %s", strerror(errno));
@@ -2054,7 +2055,8 @@ tLSC_STATUS Check_Complete_7F21_Tag(Lsc_ImageInfo_t* Os_info,
 **
 *******************************************************************************/
 bool LSC_UpdateExeStatus(uint16_t status) {
-  fLS_STATUS = fopen(LS_STATUS_PATH, "w+");
+  fLS_STATUS = fopen(LS_STATUS_PATH[gpLsc_Dwnld_Context->mchannel
+  ->getInterfaceInfo()], "w+");
   ALOGD("enter: LSC_UpdateExeStatus");
   if (fLS_STATUS == NULL) {
     ALOGE("Error opening LS Status file for backup: %s", strerror(errno));
@@ -2084,7 +2086,9 @@ tLSC_STATUS Get_LsStatus(uint8_t* pStatus) {
   tLSC_STATUS status = STATUS_FAILED;
   uint8_t lsStatus[2] = {0x63, 0x40};
   uint8_t loopcnt = 0;
-  fLS_STATUS = fopen(LS_STATUS_PATH, "r");
+  fLS_STATUS = fopen(LS_STATUS_PATH[gpLsc_Dwnld_Context
+    ->mchannel->getInterfaceInfo()], "r");
+
   if (fLS_STATUS == NULL) {
     ALOGE("Error opening LS Status file for backup: %s", strerror(errno));
     return status;

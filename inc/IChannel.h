@@ -18,6 +18,10 @@
 #define ICHANNEL_H_
 
 #include "data_types.h"
+typedef enum InterfaceInfo{
+  INTF_NFC = 0,
+  INTF_SE =1,
+}IntfInfo;
 typedef struct IChannel
 {
 /*******************************************************************************
@@ -90,7 +94,7 @@ void (*doeSE_JcopDownLoadReset)();
 ** Returns:         None.
 **
 *******************************************************************************/
-
+uint8_t (*getInterfaceInfo)();
 }IChannel_t;
 
 

@@ -19,6 +19,7 @@
 #ifndef CLIENT_INTF_H_
 #define CLIENT_INTF_H_
 #include <pthread.h>
+#include <string>
 
 typedef struct se_extns_entry{
   uint8_t isJcopUpdateRequired;
@@ -64,4 +65,7 @@ uint8_t getJcopUpdateRequired();
 uint8_t getLsUpdateRequired();
 uint8_t getJcopUpdateIntf();
 uint8_t getLsUpdateIntf();
+bool geteSETerminalId(char*);
+bool geteUICCTerminalId(char*);
+bool getNfcSeTerminalId(char*);
 #endif /* CLIENT_INTF_H_ */

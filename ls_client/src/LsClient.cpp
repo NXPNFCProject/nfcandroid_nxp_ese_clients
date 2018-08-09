@@ -28,7 +28,7 @@
 /*static char gethex(const char *s, char **endptr);
 char *convert(const char *s, int *length);*/
 uint8_t datahex(char c);
-void updateLsAid();
+void updateLsAid(uint8_t intfInfo);
 //extern pLsc_Dwnld_Context_t gpLsc_Dwnld_Context;
 //static android::sp<ISecureElementHalCallback> cCallback;
 /*******************************************************************************
@@ -68,9 +68,11 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
   tLSC_STATUS status = STATUS_FAILED;
 
   const char* lsUpdateBackupPath =
-      "/data/vendor/secure_element/loaderservice_updater.txt";
-  const char* lsUpdateBackupOutPath =
-      "/data/vendor/secure_element/loaderservice_updater_out.txt";
+      "/vendor/etc/loaderservice_updater.txt";
+  const char* lsUpdateBackupOutPath[2] =
+  {"/data/vendor/nfc/loaderservice_updater_out.txt",
+   "/data/vendor/secure_element/loaderservice_updater_out.txt",};
+  IChannel_t* mchannel = (IChannel_t*)data;
 
   /*generated SHA-1 string for secureElementLS
   This will remain constant as handled in secureElement HAL*/
@@ -82,7 +84,7 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
         (((datahex(sha1[i]) & 0x0F) << 4) | (datahex(sha1[i + 1]) & 0x0F));
   }
   /*Check and update if any new LS AID is available*/
-  updateLsAid();
+  updateLsAid(mchannel->getInterfaceInfo());
 
   if(!initialize ((IChannel_t*) data))
     return status;
@@ -104,10 +106,12 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
     fread(lsUpdateBuf, fsize, 1, fIn);
     fclose(fIn);
 
-    if ((fOut = fopen(lsUpdateBackupOutPath, "wb")) == NULL) {
-      ALOGE("%s Failed to open file %s\n", __func__, lsUpdateBackupOutPath);
+    if ((fOut = fopen(lsUpdateBackupOutPath[mchannel->getInterfaceInfo()], "wb")) == NULL) {
+      ALOGE("%s Failed to open file %s\n", __func__,
+        lsUpdateBackupOutPath[mchannel->getInterfaceInfo()]);
     } else {
-      ALOGD("%s File opened %s\n", __func__, lsUpdateBackupOutPath);
+      ALOGD("%s File opened %s\n", __func__,
+        lsUpdateBackupOutPath[mchannel->getInterfaceInfo()]);
 
       if ((long)fwrite(lsUpdateBuf, 1, fsize, fOut) != fsize) {
         ALOGE("%s ERROR - Failed to write %ld bytes to file\n", __func__, fsize);
@@ -116,7 +120,7 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
       fclose(fOut);
     }
 
-    status = LSC_Start(lsUpdateBackupPath, lsUpdateBackupOutPath,
+    status = LSC_Start(lsUpdateBackupPath, lsUpdateBackupOutPath[mchannel->getInterfaceInfo()],
                        (uint8_t*)hash, (uint16_t)sizeof(hash), resSW);
     resSW[0]=0x4e;
     ALOGD("%s LSC_Start completed\n", __func__);
@@ -166,11 +170,11 @@ uint8_t datahex(char c) {
 ** Returns:         None
 **
 *******************************************************************************/
-void updateLsAid() {
+void updateLsAid(uint8_t intfInfo) {
   ALOGD_IF( "%s Enter\n", __func__);
 
   FILE* fAID_MEM = NULL;
-  fAID_MEM = fopen(AID_MEM_PATH, "r");
+  fAID_MEM = fopen(AID_MEM_PATH[intfInfo], "r");
 
   if (fAID_MEM == NULL) {
     ALOGE("%s: AID data file does not exists", __func__);
