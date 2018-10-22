@@ -59,7 +59,7 @@ extern bool nfc_debug_enabled;
 ** Returns:         SUCCESS of ok
 **
 *******************************************************************************/
-uint8_t checkeSEClientRequired();
+uint8_t checkeSEClientRequired(ESE_CLIENT_INTF intf );
 
 uint8_t getJcopUpdateRequired();
 uint8_t getLsUpdateRequired();
@@ -68,4 +68,6 @@ uint8_t getLsUpdateIntf();
 bool geteSETerminalId(char*);
 bool geteUICCTerminalId(char*);
 bool getNfcSeTerminalId(char*);
+void setJcopUpdateRequired(uint8_t state);
+void setLsUpdateRequired(uint8_t  state);
 #endif /* CLIENT_INTF_H_ */

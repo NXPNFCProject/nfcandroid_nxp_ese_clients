@@ -40,11 +40,13 @@ static const char *path[3] = {"/vendor/etc/JcopOs_Update1.apdu",
 
 static const char *uai_path[2] = {"/vendor/etc/cci.jcsh",
                                   "/vendor/etc/jci.jcsh"};
-static const char *isSystemImgInfo = "/data/vendor/nfc/jcop_info.txt";
+static const char *isSystemImgInfo[2] = {"/data/vendor/nfc/jcop_info.txt",
+                                         "/data/vendor/secure_element/jcop_info.txt"};
 static const char *lsUpdateBackupPath =
 "/vendor/etc/loaderservice_updater.txt";
-static const char *isFirstTimeLsUpdate =
-"/data/vendor/secure_element/LS_Status.txt";
+static const char *isFirstTimeLsUpdate[2] =
+{"/data/vendor/nfc/LS_Status.txt",
+ "/data/vendor/secure_element/LS_Status.txt"};
 se_extns_entry seExtn;
 
 
@@ -59,7 +61,7 @@ se_extns_entry seExtn;
 ** Returns:         SUCCESS of ok
 **
 *******************************************************************************/
-uint8_t checkeSEClientRequired( ) {
+uint8_t checkeSEClientRequired(ESE_CLIENT_INTF intf ) {
   uint8_t status = SESTATUS_FAILED;
   unsigned long int num;
   bool isApduPresent = true;
@@ -89,7 +91,7 @@ uint8_t checkeSEClientRequired( ) {
     }
   }
   /*Check if system image is updated*/
-  if(stat(isSystemImgInfo, &st))
+  if(stat(isSystemImgInfo[intf-1], &st))
   {
       isSystemImgUpdated = true;
   }
@@ -99,7 +101,7 @@ uint8_t checkeSEClientRequired( ) {
 	  isLsScriptPresent = false;
   }
   /*Check if it is first time LS update*/
-  if(stat(isFirstTimeLsUpdate, &st))
+  if(stat(isFirstTimeLsUpdate[intf-1], &st))
   {
 	  isFirstLsUpdate = true;
   }
@@ -117,7 +119,8 @@ uint8_t checkeSEClientRequired( ) {
     seExtn.isJcopUpdateRequired = num; 
   }
   if(isApduPresent && seExtn.sJcopUpdateIntferface &&
-    (isSystemImgUpdated || seExtn.isJcopUpdateRequired))
+    ((isSystemImgUpdated && (intf == seExtn.sJcopUpdateIntferface))
+      || seExtn.isJcopUpdateRequired))
   {
 	LOG(ERROR) <<" Jcop update required  ";
     seExtn.isJcopUpdateRequired = true;
@@ -129,7 +132,8 @@ uint8_t checkeSEClientRequired( ) {
   }
 
   if(isLsScriptPresent && seExtn.sLsUpdateIntferface &&
-    (seExtn.isLSUpdateRequired || isFirstLsUpdate))
+    (seExtn.isLSUpdateRequired || (isFirstLsUpdate &&
+    (intf == seExtn.sLsUpdateIntferface))))
   {
 	  LOG(ERROR) <<" LS update required  ";
     seExtn.isLSUpdateRequired = true;
@@ -157,6 +161,16 @@ uint8_t getJcopUpdateIntf()
 uint8_t getLsUpdateIntf()
 {
   return seExtn.sLsUpdateIntferface;
+}
+
+void setJcopUpdateRequired(uint8_t state)
+{
+  seExtn.isJcopUpdateRequired = state;
+}
+
+void setLsUpdateRequired(uint8_t  state)
+{
+  seExtn.isLSUpdateRequired = state;
 }
 
 bool geteSETerminalId(char* val)

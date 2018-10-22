@@ -307,6 +307,18 @@ tJBL_STATUS JcopOsDwnld::JcopOs_update_seq_handler()
             }
             seq_counter++;
         }
+        if(status == STATUS_SUCCESS)
+        {
+          int32_t recvBufferActualSize = 0;
+          uint8_t select[] = {0, 0xA4, 0x04, 0, 0};
+          uint16_t handle = gpJcopOs_Dwnld_Context->channel->open();
+          usleep(100*1000);
+          LOG(ERROR) << StringPrintf("%s: Issue First APDU", fn);
+          gpJcopOs_Dwnld_Context->channel->transceive(select, sizeof(select),
+          trans_info.sRecvData, 1024, recvBufferActualSize, trans_info.timeout);
+
+          gpJcopOs_Dwnld_Context->channel->close(handle);
+        }
     }
     return status;
 }
