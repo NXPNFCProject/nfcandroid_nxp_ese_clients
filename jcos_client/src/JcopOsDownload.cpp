@@ -101,6 +101,7 @@ bool JcopOsDwnld::getJcopOsFileInfo()
     bool status = true;
     struct stat st;
     isPatchUpdate = false;
+    int isFilepresent = 0;
     DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("%s: Enter", fn);
     for (int num = 0; num < 2; num++)
@@ -114,19 +115,20 @@ bool JcopOsDwnld::getJcopOsFileInfo()
     if(status == true)
     {
         isUaiEnabled = true;
-    }
-    for (int num = 0; num < 3; num++)
-    {
-        if (stat(path[num], &st))
+        for (int num = 0; num < 3; num++)
         {
-            status = false;
+           if (stat(path[num], &st))
+              status = false;
+           else
+              isFilepresent++;
         }
-        if(status == false && num == 1)
+        if(isFilepresent == 1 && status == false && !(stat(path[0], &st)))
         {
-          LOG(ERROR) << StringPrintf("%s: Patch update required %d", fn, status);
-          isPatchUpdate = true;
-          status = true;
-          break;
+           isPatchUpdate = true;
+           status = true;
+        } else if(isFilepresent == 2 && status == false) {
+           isPatchUpdate = false;
+           status = false;
         }
     }
     DLOG_IF(INFO, nfc_debug_enabled)
@@ -849,11 +851,18 @@ tJBL_STATUS JcopOsDwnld::load_JcopOS_image(JcopOs_ImageInfo_t *Os_info, tJBL_STA
             status = STATUS_FAILED;
             break;
         }
+        else if(pTranscv_Info->sRecvData[recvBufferActualSize-2] == 0x6F &&
+                pTranscv_Info->sRecvData[recvBufferActualSize-1] == 0xA1)
+        {
+            LOG(ERROR) << StringPrintf("%s: JcopOs is already up to date-No update required exiting", fn);
+            Os_info->version_info.ver_status = STATUS_UPTO_DATE;
+            status = STATUS_UPTO_DATE;
+            break;
+        }
         else
         {
             status = STATUS_FAILED;
             LOG(ERROR) << StringPrintf("%s: Invalid response", fn);
-            goto exit;
         }
         LOG(ERROR) << StringPrintf("%s: Going for next line", fn);
     }
