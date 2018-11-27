@@ -21,6 +21,14 @@
 #include <pthread.h>
 #include <string>
 
+#define SEMS_STATUS_FAILED_SW1 0x63
+#define SEMS_STATUS_FAILED_SW2 0x40
+
+#define SEMS_STATUS_SUCCESS_SW1 0x90
+#define SEMS_STATUS_SUCCESS_SW2 0x00
+
+#define JCOP_UPDATE_3STEP_DONE 3
+
 typedef struct se_extns_entry{
   uint8_t isJcopUpdateRequired;
   uint8_t isLSUpdateRequired;

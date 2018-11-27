@@ -49,12 +49,13 @@ static const char *isFirstTimeLsUpdate[2] =
  "/data/vendor/secure_element/LS_Status.txt"};
 se_extns_entry seExtn;
 
-
+static bool scriptUpdateRequired(ESE_CLIENT_INTF intf);
+static bool jcopOsUpdateRequired(ESE_CLIENT_INTF intf);
 /*******************************************************************************
 **
 ** Function:        checkeSEClientUpdateRequired
 **
-** Description:     HAL service entry criteria is verified 
+** Description:     HAL service entry criteria is verified
 **                  Read the interface and condition for ese Update(JCOP download/LS download)
 **                  from the config file and file path and validate.
 **
@@ -90,39 +91,34 @@ uint8_t checkeSEClientRequired(ESE_CLIENT_INTF intf ) {
       }
     }
   }
-  /*Check if system image is updated*/
-  if(stat(isSystemImgInfo[intf-1], &st))
-  {
-      isSystemImgUpdated = true;
-  }
+  /*Check if OS udpate required*/
+  isSystemImgUpdated = jcopOsUpdateRequired(intf);
+
   /*Check if LS script present*/
   if(stat(lsUpdateBackupPath, &st))
   {
-	  isLsScriptPresent = false;
+    isLsScriptPresent = false;
   }
-  /*Check if it is first time LS update*/
-  if(stat(isFirstTimeLsUpdate[intf-1], &st))
-  {
-	  isFirstLsUpdate = true;
-  }
+  /*Check if LS update required*/
+  isFirstLsUpdate = scriptUpdateRequired(intf);
 
   if(GetNxpNumValue(NAME_NXP_P61_JCOP_DEFAULT_INTERFACE, &num, sizeof(num))) {
-    seExtn.sJcopUpdateIntferface = num; 
+    seExtn.sJcopUpdateIntferface = num;
   }
   if(GetNxpNumValue(NAME_NXP_P61_LS_DEFAULT_INTERFACE, &num, sizeof(num))) {
-	  seExtn.sLsUpdateIntferface = num; 
+    seExtn.sLsUpdateIntferface = num;
   }
   if(GetNxpNumValue(NAME_NXP_LS_FORCE_UPDATE_REQUIRED, &num, sizeof(num))) {
-    seExtn.isLSUpdateRequired = num; 
+    seExtn.isLSUpdateRequired = num;
   }
   if(GetNxpNumValue(NAME_NXP_JCOP_FORCE_UPDATE_REQUIRED, &num, sizeof(num))) {
-    seExtn.isJcopUpdateRequired = num; 
+    seExtn.isJcopUpdateRequired = num;
   }
   if(isApduPresent && seExtn.sJcopUpdateIntferface &&
     ((isSystemImgUpdated && (intf == seExtn.sJcopUpdateIntferface))
       || seExtn.isJcopUpdateRequired))
   {
-	LOG(ERROR) <<" Jcop update required  ";
+    LOG(ERROR) <<" Jcop update required  ";
     seExtn.isJcopUpdateRequired = true;
   }
   else
@@ -135,15 +131,93 @@ uint8_t checkeSEClientRequired(ESE_CLIENT_INTF intf ) {
     (seExtn.isLSUpdateRequired || (isFirstLsUpdate &&
     (intf == seExtn.sLsUpdateIntferface))))
   {
-	  LOG(ERROR) <<" LS update required  ";
+    LOG(ERROR) <<" LS update required  ";
     seExtn.isLSUpdateRequired = true;
   }
   else
   {
-	  LOG(ERROR) <<" LS update not required  ";
+    LOG(ERROR) <<" LS update not required  ";
     seExtn.isLSUpdateRequired = false;
   }
   return status;
+}
+
+/*******************************************************************************
+**
+** Function:        scriptUpdateRequired
+**
+** Description:     Get SEMS script update required
+**
+** Returns:         TRUE/FALSE
+**
+*******************************************************************************/
+bool scriptUpdateRequired(ESE_CLIENT_INTF intf)
+{
+  bool mScriptUpdateRequired = false;
+  uint32_t status[2] = {SEMS_STATUS_FAILED_SW1, SEMS_STATUS_FAILED_SW2};
+  FILE* fLS_STATUS = fopen(isFirstTimeLsUpdate[intf-1], "r");
+
+  if (fLS_STATUS == NULL) {
+    LOG(ERROR) <<"Error opening status file";
+    mScriptUpdateRequired = true;
+  }
+  else {
+    if ((fscanf(fLS_STATUS, "%2x %2x", &status[0], &status[1])) == 0) {
+      LOG(ERROR) <<"Error reading status file:";
+      status[0] = SEMS_STATUS_FAILED_SW1;
+      status[1] = SEMS_STATUS_FAILED_SW2;
+    }
+    if(status[0] == SEMS_STATUS_SUCCESS_SW1 &&
+                  status[1] == SEMS_STATUS_SUCCESS_SW2) {
+      mScriptUpdateRequired = false;
+      LOG(ERROR) <<"Last script execution success";
+    }
+    else {
+      mScriptUpdateRequired = true;
+      LOG(ERROR) <<"Last script execution failed ";
+    }
+    fclose(fLS_STATUS);
+  }
+  return mScriptUpdateRequired;
+}
+/*******************************************************************************
+**
+** Function:        jcopOsUpdateRequired
+**
+** Description:     Get JCOP update required
+**
+** Returns:         TRUE/FALSE
+**
+*******************************************************************************/
+bool jcopOsUpdateRequired(ESE_CLIENT_INTF intf)
+{
+  bool isUpdateRequired = false;
+  uint32_t status = 0;
+  FILE* fp = fopen(isSystemImgInfo[intf-1], "r");
+
+  if (fp == NULL) {
+    LOG(ERROR) <<"jcopOsUpdateRequired : file not exits for reading";
+    isUpdateRequired = true;
+  }
+  else {
+    if (fscanf(fp, "%u", &status) == 0) {
+      LOG(ERROR) <<"jcop status read fail";
+      isUpdateRequired = true;
+    }
+    else {
+      LOG(ERROR) << "JcopOsState: "<< status;
+      if (status == JCOP_UPDATE_3STEP_DONE) {
+        isUpdateRequired = false;
+        LOG(ERROR) <<"jcopOsUpdateRequired : Jcop update completed";
+      }
+      else {
+        LOG(ERROR) << "jcopOsUpdateRequired : Jcop update required";
+        isUpdateRequired = true;
+      }
+    }
+    fclose(fp);
+  }
+  return isUpdateRequired;
 }
 
 uint8_t getJcopUpdateRequired()
