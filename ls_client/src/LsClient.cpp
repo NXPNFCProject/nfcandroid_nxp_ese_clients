@@ -29,6 +29,7 @@
 char *convert(const char *s, int *length);*/
 uint8_t datahex(char c);
 void updateLsAid(uint8_t intfInfo);
+#define MAX_SEMS_OUTPUT_READ_LEN 1024
 //extern pLsc_Dwnld_Context_t gpLsc_Dwnld_Context;
 //static android::sp<ISecureElementHalCallback> cCallback;
 /*******************************************************************************
@@ -198,6 +199,121 @@ void updateLsAid(uint8_t intfInfo) {
   }
   fclose(fAID_MEM);
 }
+
+/*******************************************************************************
+**
+** Function:        phSems_readOutputFile
+**
+** Description:     Read sems output response into buffer until reached EOF
+**
+** Returns:         Output response buffer
+**
+*******************************************************************************/
+char* phSems_readOutputFile(char* ptr, uint32_t len)
+{
+  const char* lsUpdateBackupOutPath =
+   "/data/vendor/secure_element/loaderservice_updater_out.txt";
+  static FILE *fSemsOut;
+  long result = 0;
+  long readLen = 0;
+  long remainLen = 0;
+
+  if (fSemsOut == NULL) {
+    ALOGE ("Open sems output for read");
+    fSemsOut = fopen(lsUpdateBackupOutPath, "r");
+    if (fSemsOut == NULL) {
+      ALOGE("%s: SEMS output file not exists", __func__);
+      return NULL;
+    }
+  }
+  remainLen = len;
+  do {
+    result = fread(ptr+readLen, 1, remainLen, fSemsOut);
+    if (result != remainLen) {
+      if(feof(fSemsOut) || ferror(fSemsOut))
+      {
+        ALOGE ("End of file or error while reading");
+        fclose(fSemsOut);
+        return NULL;
+      }
+    } else {
+      ALOGE ("No error = %d",ferror(fSemsOut));
+    }
+    readLen += result;
+    remainLen -= result;
+  } while(readLen != len);
+  if(len < MAX_SEMS_OUTPUT_READ_LEN) {
+    ALOGE ("End of file");
+    fclose(fSemsOut);
+    fSemsOut = NULL;
+  }
+  return ptr;
+}
+
+/*******************************************************************************
+**
+** Function:        phSems_getOutputfileLen
+**
+** Description:     Returns SEMS output response file length
+**
+** Returns:         Output response file length
+**
+*******************************************************************************/
+uint32_t phSems_getOutputfileLen()
+{
+  FILE *fSemsOut;
+  long fsize = 0;
+  const char* lsUpdateBackupOutPath =
+   "/data/vendor/secure_element/loaderservice_updater_out.txt";
+
+  fSemsOut = fopen(lsUpdateBackupOutPath, "r");
+
+  if (fSemsOut == NULL) {
+    ALOGE("%s: SEMS output file not exists", __func__);
+    return 0;
+  }
+  fseek(fSemsOut, 0, SEEK_END);
+  fsize = ftell(fSemsOut);
+  rewind(fSemsOut);
+  fclose(fSemsOut);
+  return fsize;
+}
+
+/*******************************************************************************
+**
+** Function:        Get_SemsStatus
+**
+** Description:     Interface to fetch SEMS previous excution status
+*Services
+**
+** Returns:         SUCCESS/FAILURE
+**
+*******************************************************************************/
+tLSC_STATUS phSems_getSemsStatus(uint8_t* pStatus) {
+  tLSC_STATUS status = STATUS_FAILED;
+  uint8_t lsStatus[2] = {0x63, 0x40};
+  uint8_t loopcnt = 0;
+  FILE* fSemsOut = fopen("/data/vendor/secure_element/LS_Status.txt", "r");
+
+  if (fSemsOut == NULL) {
+    ALOGE("Error opening LS Status file for backup: %s", strerror(errno));
+    memcpy(pStatus, lsStatus, 2);
+    return status;
+  }
+  for (loopcnt = 0; loopcnt < 2; loopcnt++) {
+    if ((FSCANF_BYTE(fSemsOut, "%2x", &lsStatus[loopcnt])) == 0) {
+      ALOGE("Error updating LS Status backup: %s", strerror(errno));
+      fclose(fSemsOut);
+      memcpy(pStatus, lsStatus, 2);
+      return status;
+    }
+  }
+  ALOGD("enter: LSC_getLsStatus 0x%X 0x%X", lsStatus[0], lsStatus[1]);
+  memcpy(pStatus, lsStatus, 2);
+  fclose(fSemsOut);
+  return STATUS_OK;
+}
+
 
 void* phLS_memset(void* buff, int val, size_t len) {
   return memset(buff, val, len);
