@@ -27,9 +27,8 @@ This Repo contains any additional information/files required to support the rele
 
 
 
-
-
 ####Supported Versions on "br_android_ncihalx_row_p" Branch
+
 | Android Version        | NXP Release          | NXP Tag  |
 | :-------------: |:-------------:| :-----:|
 
