@@ -62,41 +62,6 @@ void* phLS_memalloc(uint32_t size);
 void  phLS_free(void* ptr);
 void* phLS_calloc(size_t datatype, size_t size);
 
-/*******************************************************************************
-**
-** Function:        phSems_readOutputFile
-**
-** Description:     Read sems output response into buffer until reached EOF
-**
-** Returns:         Output response buffer
-**
-*******************************************************************************/
-char* phSems_readOutputFile(char* ptr, uint32_t len);
-
-/*******************************************************************************
-**
-** Function:        phSems_getOutputfileLen
-**
-** Description:     Returns SEMS output response file length
-**
-** Returns:         Output response file length
-**
-*******************************************************************************/
-uint32_t phSems_getOutputfileLen();
-
-/*******************************************************************************
-**
-** Function:        phSems_getSemsStatus
-**
-** Description:     Interface to fetch SEMS previous execution status
-*Services
-**
-** Returns:         SUCCESS/FAILURE
-**
-*******************************************************************************/
-uint8_t phSems_getSemsStatus(uint8_t* pStatus);
-
-
 #endif /* LSCLIENT_H_ */
 
 #ifdef __cplusplus

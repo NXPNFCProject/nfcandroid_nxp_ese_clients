@@ -225,11 +225,12 @@ tLSC_STATUS LSC_OpenChannel(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
   tLSC_STATUS transStat = STATUS_FAILED;
   phNxpLs_data cmdApdu;
   phNxpLs_data rspApdu;
-  Os_info->channel_cnt = 0x00;
   ALOGD("%s: enter", fn);
   if (Os_info == NULL || pTranscv_Info == NULL) {
     ALOGD("%s: Invalid parameter", fn);
-  } else {
+  }
+  else {
+    Os_info->channel_cnt = 0x00;
     phLS_memset(&cmdApdu, 0x00, sizeof(phNxpLs_data));
     phLS_memset(&rspApdu, 0x00, sizeof(phNxpLs_data));
 
@@ -287,7 +288,9 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     phLS_memset(&cmdApdu, 0x00, sizeof(phNxpLs_data));
     phLS_memset(&rspApdu, 0x00, sizeof(phNxpLs_data));
 
-  GetNxpNumValue(NAME_NXP_SEMS_SUPPORTED, &semsPresent, sizeof(semsPresent));
+  if(!GetNxpNumValue(NAME_NXP_SEMS_SUPPORTED, &semsPresent, sizeof(semsPresent))) {
+    ALOGE("%s: Failed to retrieve value NAME_NXP_SEMS_SUPPORTED ", __func__);
+  }
 
   if(semsPresent)
   {
@@ -396,7 +399,7 @@ tLSC_STATUS LSC_StoreData(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
 
     ALOGD("%s: Calling Secure Element Transceive", fn);
     transStat = LSC_Transceive(&cmdApdu, &rspApdu);
-
+    phLS_free(cmdApdu.p_data);
     if ((transStat != STATUS_SUCCESS) && (rspApdu.len == 0x00)) {
       status = STATUS_FAILED;
       ALOGE("%s: SE transceive failed status = 0x%X", fn, status);
@@ -410,7 +413,6 @@ tLSC_STATUS LSC_StoreData(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
       status = STATUS_FAILED;
     }
   }
-  phLS_free(cmdApdu.p_data);
   ALOGE("%s: exit; status=0x%x", fn, status);
   return status;
 }
@@ -431,9 +433,14 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
   int32_t wLen = 0;
   uint8_t temp_buf[1024];
   uint8_t len_byte = 0, offset = 0;
-  Os_info->bytes_read = 0;
   bool reachEOFCheck = false;
   tLSC_STATUS tag40_found = STATUS_FAILED;
+
+  if (Os_info == NULL || pTranscv_Info == NULL) {
+    ALOGE("%s: invalid parameter", fn);
+    return status;
+  }
+  Os_info->bytes_read = 0;
   if (Os_info->bytes_wrote == 0xAA) {
     Os_info->fResp = fopen(Os_info->fls_RespPath, "a+");
     if (Os_info->fResp == NULL) {
@@ -446,10 +453,6 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     ALOGD("%s: Response Out file is optional as per input", fn);
   }
   ALOGD("%s: enter", fn);
-  if (Os_info == NULL || pTranscv_Info == NULL) {
-    ALOGE("%s: invalid parameter", fn);
-    return status;
-  }
   Os_info->fp = fopen(Os_info->fls_path, "r");
 
   if (Os_info->fp == NULL) {
@@ -482,9 +485,6 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     len_byte = 0x00;
     offset = 0;
     /*Check if the certificate/ is verified or not*/
-    if (status != STATUS_OK) {
-      goto exit;
-    }
     memset(temp_buf, 0, sizeof(temp_buf));
     ALOGE("%s; Start of line processing", fn);
     status = LSC_ReadScript(Os_info, temp_buf);
@@ -654,6 +654,7 @@ tLSC_STATUS LSC_Check_KeyIdentifier(Lsc_ImageInfo_t* Os_info,
       flag = STATUS_FAILED;
     } else {
       /*If the 7F21 TAG is not read: Before TAG 40*/
+      memset(read_buf, 0, sizeof(read_buf));
       status = LSC_ReadScript(Os_info, read_buf);
     }
     if (status != STATUS_OK) return status;
@@ -919,7 +920,7 @@ tLSC_STATUS LSC_SendtoEse(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     memcpy(cmdApdu.p_data, pTranscv_Info->sSendData, cmdApdu.len);
 
     transStat = LSC_Transceive(&cmdApdu, &rspApdu);
-
+    phLS_free(cmdApdu.p_data);
     if (transStat != STATUS_SUCCESS) {
       ALOGE("%s: Transceive failed; status=0x%X", fn, transStat);
     } else {
@@ -962,7 +963,6 @@ tLSC_STATUS LSC_SendtoEse(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     }
   }
 #endif
-  phLS_free(cmdApdu.p_data);
   ALOGD("%s: exit: status=0x%x", fn, status);
   return status;
 }
@@ -1048,7 +1048,7 @@ tLSC_STATUS LSC_CloseChannel(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
       cmdApdu.p_data[xx++] = 0x00;
 
       transStat = LSC_Transceive(&cmdApdu, &rspApdu);
-
+      phLS_free(cmdApdu.p_data);
       if (transStat != STATUS_SUCCESS && rspApdu.len < 2) {
         ALOGE("%s: Transceive failed; status=0x%X", fn, transStat);
       } else if ((rspApdu.p_data[rspApdu.len - 2] == 0x90) &&
@@ -1062,7 +1062,6 @@ tLSC_STATUS LSC_CloseChannel(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
       }
     }
   }
-  phLS_free(cmdApdu.p_data);
   ALOGD("%s: exit; status=0x0%x", fn, status);
   return status;
 }
@@ -1413,7 +1412,7 @@ tLSC_STATUS Send_Backall_Loadcmds(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
 
       memcpy(pTranscv_Info->sRecvData, rspApdu.p_data, rspApdu.len);
       recvBufferActualSize = rspApdu.len;
-
+      phLS_free(cmdApdu.p_data);
       if (transStat != STATUS_SUCCESS || (recvBufferActualSize < 2)) {
         ALOGE("%s: Transceive failed; status=0x%X", fn, transStat);
       } else if (cmd_count == 0x00)  // Last command in the buffer
@@ -1461,7 +1460,6 @@ tLSC_STATUS Send_Backall_Loadcmds(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
   memset(Cmd_Buffer, 0, sizeof(Cmd_Buffer));
   pBuffer = Cmd_Buffer;  // point back to start of line
   cmd_count = 0x00;
-  phLS_free(cmdApdu.p_data);
   ALOGD("%s: exit: status=0x%x", fn, status);
   return status;
 }
@@ -1728,27 +1726,25 @@ tLSC_STATUS Check_SerialNo_Tag(uint8_t* read_buf, uint16_t* offset1) {
 **
 *******************************************************************************/
 tLSC_STATUS Check_LSRootID_Tag(uint8_t* read_buf, uint16_t* offset1) {
-  tLSC_STATUS status = STATUS_FAILED;
   uint16_t offset = *offset1;
-
   if (read_buf[offset] == TAG_LSRE_ID) {
     ALOGD("TAGID: TAG_LSROOT_ENTITY");
     if (tag42Arr[0] == read_buf[offset + 1]) {
       uint8_t tag42Len = read_buf[offset + 1];
       offset = offset + 2;
-      status = memcmp(&read_buf[offset], &tag42Arr[1], tag42Arr[0]);
-      ALOGD("LSC_Check_KeyIdentifier : TAG 42 verified");
-
-      if (status == STATUS_OK) {
-        ALOGD(
-            "LSC_Check_KeyIdentifier : Loader service root entity "
+      if(!memcmp(&read_buf[offset], &tag42Arr[1], tag42Arr[0])) {
+        ALOGD("LSC_Check_KeyIdentifier : TAG 42 verified,"
+            "Loader service root entity,"
             "ID is matched");
         offset = offset + tag42Len;
         *offset1 = offset;
+        return STATUS_OK;
+      } else {
+        ALOGD("LSC_Check_KeyIdentifier : TAG 42 failed");
       }
     }
   }
-  return status;
+  return STATUS_FAILED;
 }
 
 /*******************************************************************************
@@ -1832,20 +1828,21 @@ tLSC_STATUS Check_Date_Tag(uint8_t* read_buf, uint16_t* offset1) {
 *******************************************************************************/
 tLSC_STATUS Check_45_Tag(uint8_t* read_buf, uint16_t* offset1,
                          uint8_t* tag45Len) {
-  tLSC_STATUS status = STATUS_FAILED;
   uint16_t offset = *offset1;
   if (read_buf[offset] == TAG_LSRE_SIGNID) {
     *tag45Len = read_buf[offset + 1];
     offset = offset + 2;
     if (tag45Arr[0] == *tag45Len) {
-      status = memcmp(&read_buf[offset], &tag45Arr[1], tag45Arr[0]);
-      if (status == STATUS_OK) {
+      if(!memcmp(&read_buf[offset], &tag45Arr[1], tag45Arr[0])) {
         ALOGD("LSC_Check_KeyIdentifier : TAG 45 verified");
         *offset1 = offset;
+        return STATUS_OK;
+      } else {
+        ALOGD("LSC_Check_KeyIdentifier : TAG 45 failed");
       }
     }
   }
-  return status;
+  return STATUS_FAILED;
 }
 
 /*******************************************************************************
