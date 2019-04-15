@@ -2,13 +2,13 @@
 
 This Repo contains any additional information/files required to support the release
 
-####Git Repository
+#### Git Repository
 
 | DESCRIPTION        | CHECKOUT COMMAND          |
 | :-------------: |:-------------:| 
 | nfcandroid_nxp_ese_clients    |  git clone https://github.com/NXPNFCProject/nfcandroid_nxp_ese_clients.git |
 
-####Supported Versions on "master" Branch
+#### Supported Versions on "master" Branch for Android P
 
 | Android Version        | NXP Release          | NXP Tag  |
 | :-------------: |:-------------:| :-----:|
@@ -26,7 +26,7 @@ This Repo contains any additional information/files required to support the rele
 
 
 
-####Supported Versions on "master" Branch for Android Q Master
+#### Supported Versions on "master" Branch for Android Q Master
 
 | Android Version        | NXP Release          | NXP Tag  |
 | :-------------: |:---------------------:| :-----:|
@@ -34,7 +34,7 @@ This Repo contains any additional information/files required to support the rele
 
 
 
-####Supported Versions on "br_android_ncihalx_row_p" Branch
+#### Supported Versions on "br_android_ncihalx_row_p" Branch
 
 | Android Version        | NXP Release          | NXP Tag  |
 | :-------------: |:---------------------:| :-----:|
