@@ -8,6 +8,17 @@ This Repo contains any additional information/files required to support the rele
 | :-------------: |:-------------:| 
 | nfcandroid_nxp_ese_clients    |  git clone https://github.com/NXPNFCProject/nfcandroid_nxp_ese_clients.git |
 
+
+
+#### Supported Versions on "master" Branch for Android Q Master
+
+| Android Version        | NXP Release          | NXP Tag  |
+| :-------------: |:---------------------:| :-----:|
+| aosp-master                |  10.00.04 (SN100x) |  NFC_AR_00_2000_10.00.04_OpnSrc  |
+
+
+
+
 #### Supported Versions on "master" Branch for Android P
 
 | Android Version        | NXP Release          | NXP Tag  |
@@ -26,15 +37,7 @@ This Repo contains any additional information/files required to support the rele
 
 
 
-#### Supported Versions on "master" Branch for Android Q Master
-
-| Android Version        | NXP Release          | NXP Tag  |
-| :-------------: |:---------------------:| :-----:|
-| aosp-master                |  10.00.04 (SN100x) |  NFC_AR_00_2000_10.00.04_OpnSrc  |
-
-
-
-#### Supported Versions on "br_android_ncihalx_row_p" Branch
+#### Supported Versions on "br_android_ncihalx_row_p" branch
 
 | Android Version        | NXP Release          | NXP Tag  |
 | :-------------: |:---------------------:| :-----:|
