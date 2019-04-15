@@ -26,9 +26,17 @@ This Repo contains any additional information/files required to support the rele
 
 
 
-
 ####Supported Versions on "br_android_ncihalx_row_p" Branch
 
 | Android Version        | NXP Release          | NXP Tag  |
 | :-------------: |:---------------------:| :-----:|
 | android-9.0.0_r3                 |  9.6.0 (PN80T/PN81T) |  NFC_NCIHALx_AR18C0.9.6.0_OpnSrc  |
+
+
+
+
+####Supported Versions on "master" Branch for Android Q Master
+
+| Android Version        | NXP Release          | NXP Tag  |
+| :-------------: |:---------------------:| :-----:|
+| aosp-master                |  10.00.04 (SN100x) |  NFC_AR_00_2000_10.00.04_OpnSrc  |
