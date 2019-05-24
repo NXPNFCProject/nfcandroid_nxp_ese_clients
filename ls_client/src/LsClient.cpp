@@ -101,12 +101,13 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
     if ((fOut = fopen(lsUpdateBackupOutPath[mchannel->getInterfaceInfo()], "wb")) == NULL) {
       ALOGE("%s Failed to open file %s\n", __func__,
         lsUpdateBackupOutPath[mchannel->getInterfaceInfo()]);
+      fclose(fIn);
       return status;
     } else {
       ALOGD("%s File opened %s\n", __func__,
         lsUpdateBackupOutPath[mchannel->getInterfaceInfo()]);
 
-      fseek(fIn, 0, SEEK_END);
+      fseek(fIn, 0L, SEEK_END);
       size_t fsize = ftell(fIn);
       rewind(fIn);
       if(fsize > 0) {
@@ -122,7 +123,6 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
       fclose(fIn);
       fclose(fOut);
     }
-
     status = LSC_Start(lsUpdateBackupPath, lsUpdateBackupOutPath[mchannel->getInterfaceInfo()],
                        (uint8_t*)hash, (uint16_t)sizeof(hash), resSW);
     resSW[0]=0x4e;

@@ -938,8 +938,6 @@ tJBL_STATUS JcopOsDwnld::GetJcopOsState(JcopOs_ImageInfo_t *Os_info, uint8_t *co
         }
         fprintf(fp, "%u", xx);
         fclose(fp);
-        if (chmod(JCOP_INFO_PATH[mchannel->getInterfaceInfo()], 0777) != 0)
-          LOG(ERROR) << StringPrintf("chmod failed for jcop_info.txt ");
     }
     else
     {
