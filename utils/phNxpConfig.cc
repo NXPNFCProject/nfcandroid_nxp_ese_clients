@@ -43,10 +43,11 @@
 #include <vector>
 #include <log/log.h>
 
-#include <phNxpConfig.h>
-#include <phNxpLog.h>
 #include "sparse_crc32.h"
 #include <cutils/properties.h>
+#include <errno.h>
+#include <phNxpConfig.h>
+#include <phNxpLog.h>
 
 #if GENERIC_TARGET
 const char alternative_config_path[] = "/data/vendor/nfc/";
@@ -84,20 +85,26 @@ namespace {
 size_t readConfigFile(const char* fileName, uint8_t** p_data) {
   FILE* fd = fopen(fileName, "rb");
   if (fd == nullptr) return 0;
-
   fseek(fd, 0L, SEEK_END);
   const size_t file_size = ftell(fd);
   rewind(fd);
+  if((long)file_size < 0){
+    ALOGE("%s Invalid file size file_size = %zu\n",__func__,file_size);
+    fclose(fd);
+    return 0;
+  }
 
   uint8_t* buffer = new uint8_t[file_size];
+  if (!buffer) {
+    fclose(fd);
+    return 0;
+  }
   size_t read = fread(buffer, file_size, 1, fd);
   fclose(fd);
-
   if (read == 1) {
     *p_data = buffer;
     return file_size;
   }
-
   delete[] buffer;
   return 0;
 }
@@ -430,11 +437,8 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
 **
 *******************************************************************************/
 CNfcConfig::CNfcConfig()
-    : mValidFile(true),
-      m_timeStamp(0),
-      m_timeStampRF(0),
-      m_timeStampTransit(0),
-      state(0) {}
+    : mValidFile(true), config_crc32_(0), m_timeStamp(0), m_timeStampRF(0),
+      m_timeStampTransit(0), state(0) {}
 
 /*******************************************************************************
 **
@@ -808,7 +812,9 @@ int CNfcConfig::checkTimestamp(const char* fileName, const char* fileNameTime) {
       ALOGE("%s Cannot open file %s\n", __func__, fileName);
       return 1;
     }
-    fread(&value, sizeof(unsigned long), 1, fd);
+    if (fread(&value, sizeof(unsigned long), 1, fd) != 1) {
+      ALOGE("%s File read is not successfull errno = %d", __func__, errno);
+    }
     ret = (value != timeStamp) ? 1 : 0;
     if (ret) {
       ALOGD("Config File Modified Update timestamp");
@@ -849,7 +855,9 @@ int CNfcConfig::updateTimestamp() {
       return 1;
     }
 
-    fread(&value, sizeof(unsigned long), 1, fd);
+    if (fread(&value, sizeof(unsigned long), 1, fd) != 1) {
+      ALOGE("%s File read is not successfull errno = %d", __func__, errno);
+    }
     ret = (value != m_timeStamp);
     if (ret) {
       fseek(fd, 0, SEEK_SET);
@@ -869,7 +877,9 @@ bool CNfcConfig::isModified() {
   }
 
   uint32_t stored_crc32 = 0;
-  fread(&stored_crc32, sizeof(uint32_t), 1, fd);
+  if (fread(&stored_crc32, sizeof(uint32_t), 1, fd) != 1) {
+    ALOGE("%s File read is not successfull errno = %d", __func__, errno);
+  }
   fclose(fd);
 
   return stored_crc32 != config_crc32_;

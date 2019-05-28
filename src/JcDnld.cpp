@@ -64,7 +64,7 @@ inline int FSCANF_BYTE(FILE *stream, const char *format, void *pVal) {
   return Result;
 }
 
-JcDnld::JcDnld() {}
+JcDnld::JcDnld() { mIsInit = false; }
 
 JcDnld &JcDnld::getInstance() { return sOsuInstance; }
 
@@ -375,7 +375,7 @@ STATUS_JCOP_OSU JcDnld::GetInfo(JcopOs_ImageInfo_t *pImageInfo,
     {
       LOG(ERROR) << StringPrintf("Starting 3-Step update");
       memcpy(pImageInfo->fls_path, OSU_APDU_FILE_PATH_LIST[pImageInfo->index],
-             sizeof(OSU_APDU_FILE_PATH_LIST[pImageInfo->index]));
+             strlen(OSU_APDU_FILE_PATH_LIST[pImageInfo->index]) + 1);
       pImageInfo->index++;
     }
     status = STATUS_SUCCESS;
@@ -568,7 +568,9 @@ STATUS_JCOP_OSU JcDnld::GetJcopOsState(JcopOs_ImageInfo_t *Os_info,
         0)
       LOG(ERROR) << StringPrintf("chmod failed for jcop_info.txt ");
   } else {
-    FSCANF_BYTE(fp, "%u", &xx);
+    if (FSCANF_BYTE(fp, "%u", &xx) == 0) {
+      LOG(ERROR) << StringPrintf("Failed in fscanf function");
+    }
     LOG(ERROR) << StringPrintf("JcopOsState %d", xx);
     fclose(fp);
   }
