@@ -98,28 +98,31 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
     return status;
   } else {
     ALOGD("%s File opened %s\n", __func__, lsUpdateBackupPath);
-    fseek(fIn, 0, SEEK_END);
-    long fsize = ftell(fIn);
-    rewind(fIn);
-
-    char* lsUpdateBuf = (char*)malloc(fsize + 1);
-    fread(lsUpdateBuf, fsize, 1, fIn);
-    fclose(fIn);
-
     if ((fOut = fopen(lsUpdateBackupOutPath[mchannel->getInterfaceInfo()], "wb")) == NULL) {
       ALOGE("%s Failed to open file %s\n", __func__,
         lsUpdateBackupOutPath[mchannel->getInterfaceInfo()]);
+      fclose(fIn);
+      return status;
     } else {
       ALOGD("%s File opened %s\n", __func__,
         lsUpdateBackupOutPath[mchannel->getInterfaceInfo()]);
 
-      if ((long)fwrite(lsUpdateBuf, 1, fsize, fOut) != fsize) {
-        ALOGE("%s ERROR - Failed to write %ld bytes to file\n", __func__, fsize);
+      fseek(fIn, 0L, SEEK_END);
+      size_t fsize = ftell(fIn);
+      rewind(fIn);
+      if(fsize > 0) {
+        char* lsUpdateBuf = (char*)malloc(fsize + 1);
+        if (fread(lsUpdateBuf, fsize, 1, fIn) != 1) {
+          ALOGE("%s: Failed to read file", __func__);
+        }
+        if ((long)fwrite(lsUpdateBuf, fsize, 1, fOut) != 1) {
+          ALOGE("%s ERROR - Failed to write %zu bytes to file\n", __func__, fsize);
+        }
+        free(lsUpdateBuf);
       }
-
+      fclose(fIn);
       fclose(fOut);
     }
-
     status = LSC_Start(lsUpdateBackupPath, lsUpdateBackupOutPath[mchannel->getInterfaceInfo()],
                        (uint8_t*)hash, (uint16_t)sizeof(hash), resSW);
     resSW[0]=0x4e;
@@ -133,10 +136,8 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
               lsUpdateBackupPath);
       }
     }
-    free(lsUpdateBuf);
   }
   ALOGD("%s pthread_exit\n", __func__);
-
   return status;
 }
 
