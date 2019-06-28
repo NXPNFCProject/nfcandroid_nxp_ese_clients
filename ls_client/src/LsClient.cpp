@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2018 NXP
+ *  Copyright 2018-2019 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -110,12 +110,12 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
       fseek(fIn, 0L, SEEK_END);
       size_t fsize = ftell(fIn);
       rewind(fIn);
-      if(fsize > 0) {
+      if((long)fsize > 0) {
         char* lsUpdateBuf = (char*)malloc(fsize + 1);
         if (fread(lsUpdateBuf, fsize, 1, fIn) != 1) {
           ALOGE("%s: Failed to read file", __func__);
         }
-        if ((long)fwrite(lsUpdateBuf, fsize, 1, fOut) != 1) {
+        if (fwrite(lsUpdateBuf, fsize, 1, fOut) != 1) {
           ALOGE("%s ERROR - Failed to write %zu bytes to file\n", __func__, fsize);
         }
         free(lsUpdateBuf);
