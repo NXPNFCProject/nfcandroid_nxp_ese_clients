@@ -50,6 +50,7 @@ typedef struct Lsc_ImageInfo {
   int bytes_wrote;
   Lsc_ChannelInfo_t Channel_Info[10];
   uint8_t channel_cnt;
+  bool isUpdaterMode;
 } Lsc_ImageInfo_t;
 typedef enum {
   LS_Default = 0x00,

@@ -106,20 +106,6 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
     } else {
       ALOGD("%s File opened %s\n", __func__,
         lsUpdateBackupOutPath[mchannel->getInterfaceInfo()]);
-
-      fseek(fIn, 0L, SEEK_END);
-      size_t fsize = ftell(fIn);
-      rewind(fIn);
-      if((long)fsize > 0) {
-        char* lsUpdateBuf = (char*)malloc(fsize + 1);
-        if (fread(lsUpdateBuf, fsize, 1, fIn) != 1) {
-          ALOGE("%s: Failed to read file", __func__);
-        }
-        if (fwrite(lsUpdateBuf, fsize, 1, fOut) != 1) {
-          ALOGE("%s ERROR - Failed to write %zu bytes to file\n", __func__, fsize);
-        }
-        free(lsUpdateBuf);
-      }
       fclose(fIn);
       fclose(fOut);
     }
