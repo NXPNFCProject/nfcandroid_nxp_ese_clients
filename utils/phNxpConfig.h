@@ -135,7 +135,7 @@ int updateNxpConfigTimestamp();
 #define NAME_NXP_SPI_SE_TERMINAL_NUM "NXP_SPI_SE_TERMINAL_NUM"
 #define NAME_NXP_VISO_SE_TERMINAL_NUM "NXP_VISO_SE_TERMINAL_NUM"
 #define NAME_NXP_NFC_SE_TERMINAL_NUM "NXP_NFC_SE_TERMINAL_NUM"
-#define NAME_NXP_TRUSTED_SE_TERMINAL_NUM "NXP_TRUSTED_SE_TERMINAL_NUM"
+
 /* default configuration */
 #define default_storage_location "/data/vendor/nfc"
 

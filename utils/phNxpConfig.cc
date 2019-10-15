@@ -20,7 +20,7 @@
  *
  *  The original Work has been changed by NXP Semiconductors.
  *
- *  Copyright (C) 2013-2019 NXP Semiconductors
+ *  Copyright (C) 2013-2018 NXP Semiconductors
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -87,23 +87,16 @@ size_t readConfigFile(const char* fileName, uint8_t** p_data) {
   fseek(fd, 0L, SEEK_END);
   const size_t file_size = ftell(fd);
   rewind(fd);
-  if ((long)file_size < 0) {
-    ALOGE("%s Invalid file size file_size = %zu\n", __func__, file_size);
-    fclose(fd);
-    return 0;
-  }
 
   uint8_t* buffer = new uint8_t[file_size];
-  if (!buffer) {
-    fclose(fd);
-    return 0;
-  }
   size_t read = fread(buffer, file_size, 1, fd);
   fclose(fd);
+
   if (read == 1) {
     *p_data = buffer;
     return file_size;
   }
+
   delete[] buffer;
   return 0;
 }
@@ -354,8 +347,8 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
           state = END_LINE;
           break;
         }
-        // fall through to numValue to handle numValue
-        [[fallthrough]];
+      // fall through to numValue to handle numValue
+
       case NUM_VALUE:
         if (isDigit(c, base)) {
           numValue *= base;
@@ -438,7 +431,6 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
 *******************************************************************************/
 CNfcConfig::CNfcConfig()
     : mValidFile(true),
-      config_crc32_(0),
       m_timeStamp(0),
       m_timeStampRF(0),
       m_timeStampTransit(0),
@@ -799,9 +791,7 @@ int CNfcConfig::checkTimestamp(const char* fileName, const char* fileNameTime) {
       ALOGE("%s Cannot open file %s\n", __func__, fileName);
       return 1;
     }
-    if(fread(&value, sizeof(unsigned long), 1, fd) != 1) {
-      ALOGE("%s: Failed to read file", __func__);
-    }
+    fread(&value, sizeof(unsigned long), 1, fd);
     ret = (value != timeStamp) ? 1 : 0;
     if (ret) {
       ALOGD("Config File Modified Update timestamp");
@@ -842,9 +832,7 @@ int CNfcConfig::updateTimestamp() {
       return 1;
     }
 
-    if(fread(&value, sizeof(unsigned long), 1, fd) != 1) {
-      ALOGE("%s: Failed to read file", __func__);
-    }
+    fread(&value, sizeof(unsigned long), 1, fd);
     ret = (value != m_timeStamp);
     if (ret) {
       fseek(fd, 0, SEEK_SET);
@@ -864,9 +852,7 @@ bool CNfcConfig::isModified() {
   }
 
   uint32_t stored_crc32 = 0;
-  if(fread(&stored_crc32, sizeof(uint32_t), 1, fd) != 1) {
-    ALOGE("%s: Failed to read file", __func__);
-  }
+  fread(&stored_crc32, sizeof(uint32_t), 1, fd);
   fclose(fd);
 
   return stored_crc32 != config_crc32_;

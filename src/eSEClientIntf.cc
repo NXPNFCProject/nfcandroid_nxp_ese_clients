@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -38,8 +38,8 @@ static const char *path[3] = {"/vendor/etc/JcopOs_Update1.apdu",
                              "/vendor/etc/JcopOs_Update2.apdu",
                              "/vendor/etc/JcopOs_Update3.apdu"};
 
-static const char *uai_path[2] = {"/vendor/etc/cci.apdu",
-                                  "/vendor/etc/jci.apdu"};
+static const char *uai_path[2] = {"/vendor/etc/cci.jcsh",
+                                  "/vendor/etc/jci.jcsh"};
 static const char *isSystemImgInfo[2] = {"/data/vendor/nfc/jcop_info.txt",
                                          "/data/vendor/secure_element/jcop_info.txt"};
 static const char *lsUpdateBackupPath =
@@ -255,20 +255,6 @@ bool geteSETerminalId(char* val)
   {
     LOG(ERROR) <<"eSETerminalId found";
     ALOGE("eSETerminalId found val = %s ", val);
-
-    ret = true;
-  }
-  return ret;
-}
-
-bool getTruestedSETerminalId(char* val)
-{
-  bool ret = false;
-
-  if(GetNxpStrValue(NAME_NXP_TRUSTED_SE_TERMINAL_NUM, val, TERMINAL_LEN))
-  {
-    LOG(INFO) <<"TrustedSE TerminalId found";
-    ALOGD("TrustedSE TerminalId found val = %s ", val);
 
     ret = true;
   }

@@ -1,5 +1,5 @@
  /*
-  * Copyright (C) 2015-2019 NXP Semiconductors
+  * Copyright (C) 2015-2018 NXP Semiconductors
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -61,24 +61,6 @@ bool (*close)(int16_t mHandle);
 **
 *******************************************************************************/
 bool (*transceive) (uint8_t* xmitBuffer, int32_t xmitBufferSize, uint8_t* recvBuffer,
-                     int32_t recvBufferMaxSize, int32_t& recvBufferActualSize, int32_t timeoutMillisec);
-
-/*******************************************************************************
-**
-** Function:        transceiveRaw
-**
-** Description:     Send data to the secure element; read it's response.
-**                  xmitBuffer: Data to transmit.
-**                  xmitBufferSize: Length of data.
-**                  recvBuffer: Buffer to receive response.
-**                  recvBufferMaxSize: Maximum size of buffer.
-**                  recvBufferActualSize: Actual length of response.
-**                  timeoutMillisec: timeout in millisecond
-**
-** Returns:         True if ok.
-**
-*******************************************************************************/
-bool (*transceiveRaw) (uint8_t* xmitBuffer, int32_t xmitBufferSize, uint8_t* recvBuffer,
                      int32_t recvBufferMaxSize, int32_t& recvBufferActualSize, int32_t timeoutMillisec);
 
 /*******************************************************************************

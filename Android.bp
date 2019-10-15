@@ -10,12 +10,7 @@ cc_library_shared {
         "src/eSEClientIntf.cc",
         "src/phNxpLog.cc"
     ],
-    export_include_dirs: [
-     "inc",
-     "utils",
-     "jcos_client/inc",
-     "ls_client/inc",
-    ],
+
     local_include_dirs: [
         "inc",
         "utils",
