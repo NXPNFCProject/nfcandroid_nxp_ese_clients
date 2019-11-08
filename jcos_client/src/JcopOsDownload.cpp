@@ -1,5 +1,5 @@
  /*
-  * Copyright (C) 2015-2018 NXP Semiconductors
+  * Copyright (C) 2015-2019 NXP Semiconductors
   *
   * Licensed under the Apache License, Version 2.0 (the "License");
   * you may not use this file except in compliance with the License.
@@ -52,8 +52,8 @@ static const char *path[3] = {"/vendor/etc/JcopOs_Update1.apdu",
 static const char *JCOP_INFO_PATH[2] = {"/data/vendor/nfc/jcop_info.txt",
                             "/data/vendor/secure_element/jcop_info.txt"};
 
-static const char *uai_path[2] = {"/vendor/etc/cci.jcsh",
-                                  "/vendor/etc/jci.jcsh"};
+static const char *uai_path[2] = {"/vendor/etc/cci.apdu",
+                                  "/vendor/etc/jci.apdu"};
 
 inline int FSCANF_BYTE(FILE *stream, const char *format, void* pVal)
 {
@@ -290,24 +290,23 @@ tJBL_STATUS JcopOsDwnld::JcopOs_update_seq_handler()
 
     DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("%s: enter", fn);
-    status = GetJcopOsState(&update_info, &seq_counter);
+    status = GetJcopOsState(&update_info, &seq_counter, &trans_info);
     if(status != STATUS_SUCCESS)
     {
         LOG(ERROR) << StringPrintf("Error in getting JcopOsState info");
     }
     else
     {
-        LOG(ERROR) << StringPrintf("seq_counter %d", seq_counter);
-        while((JcopOs_dwnld_seqhandler[seq_counter]) != NULL )
-        {
-            status = STATUS_FAILED;
-            status = (*this.*(JcopOs_dwnld_seqhandler[seq_counter]))(&update_info, status, &trans_info );
-            if(STATUS_SUCCESS != status)
-            {
-                LOG(ERROR) << StringPrintf("%s: exiting; status=0x0%X", fn, status);
-                break;
-            }
-            seq_counter++;
+      LOG(ERROR) << StringPrintf("seq_counter %d", seq_counter);
+      while ((JcopOs_dwnld_seqhandler[seq_counter]) != NULL) {
+        status = STATUS_FAILED;
+        status = (*this.*(JcopOs_dwnld_seqhandler[seq_counter]))(
+            &update_info, status, &trans_info);
+        if (STATUS_SUCCESS != status) {
+          LOG(ERROR) << StringPrintf("%s: exiting; status=0x0%X", fn, status);
+          break;
+        }
+        seq_counter++;
         }
         if(status == STATUS_SUCCESS)
         {
@@ -359,7 +358,7 @@ tJBL_STATUS JcopOsDwnld::TriggerApdu(JcopOs_ImageInfo_t* pVersionInfo, tJBL_STAT
 
         DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("%s: Calling Secure Element Transceive", fn);
-        stat = mchannel->transceive (pTranscv_Info->sSendData,
+        stat = mchannel->transceiveRaw (pTranscv_Info->sSendData,
                                 pTranscv_Info->sSendlength,
                                 pTranscv_Info->sRecvData,
                                 pTranscv_Info->sRecvlength,
@@ -416,16 +415,13 @@ tJBL_STATUS JcopOsDwnld::SendUAICmds(JcopOs_ImageInfo_t* Os_info, tJBL_STATUS st
     DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("%s: enter;", fn);
 
-    if(!isUaiEnabled)
-    {
-        goto exit;
-    }
-    if(pTranscv_Info == NULL ||
-               Os_info == NULL)
-    {
+    if(!pTranscv_Info || !Os_info) {
         DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("%s: Invalid parameter", fn);
-        status = STATUS_FAILED;
+        return STATUS_FAILED;
+    }
+    if(!isUaiEnabled) {
+        goto exit;
     }
     for(i = 0; i < 2; i++)
     {
@@ -445,11 +441,12 @@ tJBL_STATUS JcopOsDwnld::SendUAICmds(JcopOs_ImageInfo_t* Os_info, tJBL_STATUS st
             LOG(ERROR) << StringPrintf("Error ftelling file %s", strerror(errno));
             goto exit;
         }
-        wResult = fseek(Os_info->fp, 6L, SEEK_SET);
+        wResult = fseek(Os_info->fp, 0L, SEEK_SET);
         if (wResult) {
             LOG(ERROR) << StringPrintf("Error seeking start image file %s", strerror(errno));
             goto exit;
         }
+        while(!feof(Os_info->fp))
         {
             wIndex=0;
             wLen=0;
@@ -461,6 +458,9 @@ tJBL_STATUS JcopOsDwnld::SendUAICmds(JcopOs_ImageInfo_t* Os_info, tJBL_STATUS st
             for(wCount =0; (wCount < 5 && !feof(Os_info->fp)); wCount++, wIndex++)
             {
                 wResult = FSCANF_BYTE(Os_info->fp,"%2X",&pTranscv_Info->sSendData[wIndex]);
+                if(wResult == 0) {
+                    LOG(ERROR) << StringPrintf("%s: Failed in fscanf", fn);
+                }
             }
             if(wResult != 0)
             {
@@ -470,12 +470,21 @@ tJBL_STATUS JcopOsDwnld::SendUAICmds(JcopOs_ImageInfo_t* Os_info, tJBL_STATUS st
                 {
                     LOG(ERROR) << StringPrintf("%s: Extended APDU", fn);
                     wResult = FSCANF_BYTE(Os_info->fp,"%2X",&pTranscv_Info->sSendData[wIndex++]);
+                    if(wResult == 0) {
+                        LOG(ERROR) << StringPrintf("%s: Failed in fscanf", fn);
+                    }
                     wResult = FSCANF_BYTE(Os_info->fp,"%2X",&pTranscv_Info->sSendData[wIndex++]);
+                    if(wResult == 0) {
+                        LOG(ERROR) << StringPrintf("%s: Failed in fscanf", fn);
+                    }
                     wLen = ((pTranscv_Info->sSendData[5] << 8) | (pTranscv_Info->sSendData[6]));
                 }
                 for(wCount =0; (wCount < wLen && !feof(Os_info->fp)); wCount++, wIndex++)
                 {
                     wResult = FSCANF_BYTE(Os_info->fp,"%2X",&pTranscv_Info->sSendData[wIndex]);
+                    if(wResult == 0) {
+                        LOG(ERROR) << StringPrintf("%s: Failed in fscanf", fn);
+                    }
                 }
             }
             else
@@ -490,7 +499,7 @@ tJBL_STATUS JcopOsDwnld::SendUAICmds(JcopOs_ImageInfo_t* Os_info, tJBL_STATUS st
                (pTranscv_Info->sSendData[1] != 0x00))
             {
 
-                stat = mchannel->transceive(pTranscv_Info->sSendData,
+                stat = mchannel->transceiveRaw(pTranscv_Info->sSendData,
                                         pTranscv_Info->sSendlength,
                                         pTranscv_Info->sRecvData,
                                         pTranscv_Info->sRecvlength,
@@ -500,7 +509,7 @@ tJBL_STATUS JcopOsDwnld::SendUAICmds(JcopOs_ImageInfo_t* Os_info, tJBL_STATUS st
             else
             {
                 LOG(ERROR) << StringPrintf("%s: Invalid packet", fn);
-                goto exit;
+                continue;
             }
             if(stat != true)
             {
@@ -526,20 +535,34 @@ tJBL_STATUS JcopOsDwnld::SendUAICmds(JcopOs_ImageInfo_t* Os_info, tJBL_STATUS st
             {
                 status = STATUS_FAILED;
                 LOG(ERROR) << StringPrintf("%s: pTranscv_Info->sRecvData[recvBufferActualSize-1] = 0x%x%x recvBufferActualSize = %d", fn,
-                		pTranscv_Info->sRecvData[recvBufferActualSize-2], pTranscv_Info->sRecvData[recvBufferActualSize-1],recvBufferActualSize);
+                        pTranscv_Info->sRecvData[recvBufferActualSize-2], pTranscv_Info->sRecvData[recvBufferActualSize-1],recvBufferActualSize);
                 LOG(ERROR) << StringPrintf("%s: Invalid response", fn);
                 goto exit;
             }
         }
-        wResult = fclose(Os_info->fp);
+        fclose(Os_info->fp);
+        Os_info->fp = NULL;
     }
 exit:
     LOG(ERROR) << StringPrintf("%s close fp and exit; status= 0x%X", fn,status);
-    mchannel->doeSE_JcopDownLoadReset();
-    if(status == STATUS_SUCCESS)
+
+    if(status == STATUS_SUCCESS) {
         SetJcopOsState(Os_info, JCOP_UPDATE_STATE_TRIGGER_APDU);
-    else
-        wResult = fclose(Os_info->fp);
+    } else {
+      /*Only required in case of secure_elemnt/SPI interface*/
+      if(mchannel->doeSE_Reset != NULL) {
+        mchannel->doeSE_Reset();
+        usleep(100*1000);
+      }
+    }
+    /* Reset to restart UAI
+     * and MW context reset(SPI) & power recycle
+     * in SMB*/
+    mchannel->doeSE_JcopDownLoadReset();
+    if(Os_info->fp) {
+        fclose(Os_info->fp);
+        Os_info->fp = NULL;
+    }
 
     return status;
 }
@@ -582,7 +605,7 @@ tJBL_STATUS JcopOsDwnld::UaiTriggerApdu(JcopOs_ImageInfo_t* pVersionInfo, tJBL_S
 
         DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("%s: Calling Secure Element Transceive", fn);
-        stat = mchannel->transceive (pTranscv_Info->sSendData,
+        stat = mchannel->transceiveRaw (pTranscv_Info->sSendData,
                                 pTranscv_Info->sSendlength,
                                 pTranscv_Info->sRecvData,
                                 pTranscv_Info->sRecvlength,
@@ -593,22 +616,27 @@ tJBL_STATUS JcopOsDwnld::UaiTriggerApdu(JcopOs_ImageInfo_t* pVersionInfo, tJBL_S
             status = STATUS_FAILED;
             LOG(ERROR) << StringPrintf("%s: SE transceive failed status = 0x%X", fn, status);//Stop JcopOs Update
         }
-        else if(((pTranscv_Info->sRecvData[recvBufferActualSize-2] == 0x68) &&
-               (pTranscv_Info->sRecvData[recvBufferActualSize-1] == 0x81))||
-               ((pTranscv_Info->sRecvData[recvBufferActualSize-2] == 0x90) &&
-               (pTranscv_Info->sRecvData[recvBufferActualSize-1] == 0x00))||
-               ((pTranscv_Info->sRecvData[recvBufferActualSize-2] == 0x6F) &&
+        else if(((pTranscv_Info->sRecvData[recvBufferActualSize-2] == 0x90) &&
                (pTranscv_Info->sRecvData[recvBufferActualSize-1] == 0x00)))
         {
             /*mchannel->doeSE_JcopDownLoadReset();*/
             status = STATUS_OK;
-            DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: Trigger APDU Transceive status = 0x%X", fn, status);
+            DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf
+                ("%s: Trigger APDU Transceive status = 0x%X", fn, status);
         }
         else
         {
-            /* status {90, 00} */
-            status = STATUS_OK;
+            status = STATUS_FAILED;
+            /*Only required in case of secure_elemnt/SPI interface*/
+            if(mchannel->doeSE_Reset != NULL) {
+              /*Hard reset of recovery*/
+              mchannel->doeSE_Reset();
+              usleep(100*1000);
+            }
+            /*Followed by interface reset to restart UAI
+             * and MW context reset(SPI) & power recycle
+             * in SMB*/
+            mchannel->doeSE_JcopDownLoadReset();
         }
     }
     DLOG_IF(INFO, nfc_debug_enabled)
@@ -644,7 +672,8 @@ tJBL_STATUS JcopOsDwnld::GetInfo(JcopOs_ImageInfo_t* pImageInfo, tJBL_STATUS sta
     }
     else
     {
-        memcpy(pImageInfo->fls_path, (char *)path[pImageInfo->index], strlen(path[pImageInfo->index]));
+        memcpy(pImageInfo->fls_path, (char *)path[pImageInfo->index],
+                 strlen(path[pImageInfo->index]) + 1);
 
         memset(pTranscv_Info->sSendData, 0, JCOP_MAX_BUF_SIZE);
         pTranscv_Info->timeout = gTransceiveTimeout;
@@ -676,29 +705,16 @@ tJBL_STATUS JcopOsDwnld::GetInfo(JcopOs_ImageInfo_t* pImageInfo, tJBL_STATUS sta
         else if((pTranscv_Info->sRecvData[recvBufferActualSize-2] == 0x90) &&
                 (pTranscv_Info->sRecvData[recvBufferActualSize-1] == 0x00))
         {
-            pImageInfo->version_info.osid = pTranscv_Info->sRecvData[recvBufferActualSize-6];
-            pImageInfo->version_info.ver1 = pTranscv_Info->sRecvData[recvBufferActualSize-5];
-            pImageInfo->version_info.ver0 = pTranscv_Info->sRecvData[recvBufferActualSize-4];
-            pImageInfo->version_info.OtherValid = pTranscv_Info->sRecvData[recvBufferActualSize-3];
-#if 0
-            if((pImageInfo->index != 0) &&
-               (pImageInfo->version_info.osid == 0x01) &&
-               (pImageInfo->version_info.OtherValid == 0x11))
-            {
-                LOG(ERROR) << StringPrintf("3-Step update is not required");
-                memset(pImageInfo->fls_path,0,sizeof(pImageInfo->fls_path));
-                pImageInfo->index=0;
-            }
-            else
-#endif
-            {
-                LOG(ERROR) << StringPrintf("Starting 3-Step update");
-                memcpy(pImageInfo->fls_path, path[pImageInfo->index], sizeof(path[pImageInfo->index]));
-                pImageInfo->index++;
-            }
-            status = STATUS_OK;
-            DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: GetInfo Transceive status = 0x%X", fn, status);
+          SetUAI_Data(pImageInfo, pTranscv_Info->sRecvData);
+
+          memcpy(pImageInfo->fls_path, path[pImageInfo->index],
+                 strlen(path[pImageInfo->index]) + 1);
+
+          pImageInfo->index++;
+          status = STATUS_OK;
+
+          DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
+              "%s: GetInfo Transceive status = 0x%X", fn, status);
         }
         else if((pTranscv_Info->sRecvData[recvBufferActualSize-2] == 0x6A) &&
                 (pTranscv_Info->sRecvData[recvBufferActualSize-1] == 0x82) &&
@@ -896,76 +912,87 @@ exit:
 ** Returns:         Success if ok.
 **
 *******************************************************************************/
-tJBL_STATUS JcopOsDwnld::GetJcopOsState(JcopOs_ImageInfo_t *Os_info, uint8_t *counter)
-{
-    static const char fn [] = "JcopOsDwnld::GetJcopOsState";
-    tJBL_STATUS status = STATUS_SUCCESS;
-    FILE *fp;
-    uint8_t xx=0;
-    DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: enter", fn);
-    IChannel_t *mchannel = gpJcopOs_Dwnld_Context->channel;
-    if(Os_info == NULL)
-    {
-        LOG(ERROR) << StringPrintf("%s: invalid parameter", fn);
-        return STATUS_FAILED;
-    }
-    fp = fopen(JCOP_INFO_PATH[mchannel->getInterfaceInfo()], "r");
+tJBL_STATUS
+JcopOsDwnld::GetJcopOsState(JcopOs_ImageInfo_t *Os_info, uint8_t *counter,
+                            JcopOs_TranscieveInfo_t *pTranscv_Info) {
+  static const char fn[] = "JcopOsDwnld::GetJcopOsState";
+  tJBL_STATUS status = STATUS_SUCCESS;
+  FILE *fp;
+  uint8_t xx = 0;
+  DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("%s: enter", fn);
+  IChannel_t *mchannel = gpJcopOs_Dwnld_Context->channel;
+  if (Os_info == NULL) {
+    LOG(ERROR) << StringPrintf("%s: invalid parameter", fn);
+    return STATUS_FAILED;
+  }
+  fp = fopen(JCOP_INFO_PATH[mchannel->getInterfaceInfo()], "r");
 
-
+  if (fp == NULL) {
+    LOG(ERROR) << StringPrintf(
+        "file <%s> not exits for reading- creating new file: %s",
+        JCOP_INFO_PATH[mchannel->getInterfaceInfo()], strerror(errno));
+    fp = fopen(JCOP_INFO_PATH[mchannel->getInterfaceInfo()], "w+");
     if (fp == NULL) {
-        LOG(ERROR) << StringPrintf("file <%s> not exits for reading- creating new file: %s",
-                JCOP_INFO_PATH[mchannel->getInterfaceInfo()], strerror(errno));
-        fp = fopen(JCOP_INFO_PATH[mchannel->getInterfaceInfo()], "w+");
-        if (fp == NULL)
-        {
-            LOG(ERROR) << StringPrintf("Error opening OS image file <%s> for reading: %s",
-              JCOP_INFO_PATH[mchannel->getInterfaceInfo()], strerror(errno));
-            return STATUS_FAILED;
-        }
-        fprintf(fp, "%u", xx);
-        fclose(fp);
+      LOG(ERROR) << StringPrintf(
+          "Error opening OS image file <%s> for reading: %s",
+          JCOP_INFO_PATH[mchannel->getInterfaceInfo()], strerror(errno));
+      return STATUS_FAILED;
     }
-    else
-    {
-        FSCANF_BYTE(fp, "%u", &xx);
-        LOG(ERROR) << StringPrintf("JcopOsState %d", xx);
-        fclose(fp);
+    fprintf(fp, "%u", xx);
+    fclose(fp);
+  } else {
+    if (FSCANF_BYTE(fp, "%u", &xx) == 0) {
+      LOG(ERROR) << StringPrintf("Failed in fscanf function");
     }
+    LOG(ERROR) << StringPrintf("JcopOsState %d", xx);
+    fclose(fp);
+  }
 
-    switch(xx)
-    {
-    case JCOP_UPDATE_STATE0:
-    case JCOP_UPDATE_STATE3:
-        LOG(ERROR) << StringPrintf("Starting update from UAI Authentication");
-        Os_info->index = JCOP_UPDATE_STATE0;
-        Os_info->cur_state = JCOP_UPDATE_STATE0;
-        *counter = 0;
-        break;
-    case JCOP_UPDATE_STATE1:
-        LOG(ERROR) << StringPrintf("Starting update from step2");
-        Os_info->index = JCOP_UPDATE_STATE1;
-        Os_info->cur_state = JCOP_UPDATE_STATE1;
-        *counter = 5;
-        break;
-    case JCOP_UPDATE_STATE2:
-        LOG(ERROR) << StringPrintf("Starting update from step3");
-        Os_info->index = JCOP_UPDATE_STATE2;
-        Os_info->cur_state = JCOP_UPDATE_STATE2;
-        *counter = 7;
-        break;
-    case JCOP_UPDATE_STATE_TRIGGER_APDU:
-        LOG(ERROR) << StringPrintf("Starting update from step1");
-        Os_info->index = JCOP_UPDATE_STATE0;
-        Os_info->cur_state = JCOP_UPDATE_STATE0;
-        *counter = 2;
-        break;
-    default:
-        LOG(ERROR) << StringPrintf("invalid state");
-        status = STATUS_FAILED;
-        break;
+  status = Get_UAI_JcopOsState(Os_info, &xx, pTranscv_Info);
+  if (status != STATUS_SUCCESS) {
+    if (status == STATUS_UPTO_DATE) {
+      DLOG_IF(INFO, nfc_debug_enabled)
+          << StringPrintf("Jcop already upto date");
+    } else {
+      DLOG_IF(INFO, nfc_debug_enabled)
+          << StringPrintf("Error in getting DeriveJcopOsu_State info");
     }
     return status;
+  }
+
+  switch (xx) {
+  case JCOP_UPDATE_STATE0:
+  case JCOP_UPDATE_STATE3:
+    LOG(ERROR) << StringPrintf("Starting update from UAI Authentication");
+    Os_info->index = JCOP_UPDATE_STATE0;
+    Os_info->cur_state = JCOP_UPDATE_STATE0;
+    *counter = OSU_UAI_TRIGGER_STATE;
+    break;
+  case JCOP_UPDATE_STATE1:
+    LOG(ERROR) << StringPrintf("Starting update from step2");
+    Os_info->index = JCOP_UPDATE_STATE1;
+    Os_info->cur_state = JCOP_UPDATE_STATE1;
+    *counter = OSU_GETINFO_STATE2;
+    break;
+  case JCOP_UPDATE_STATE2:
+    LOG(ERROR) << StringPrintf("Starting update from step3");
+    Os_info->index = JCOP_UPDATE_STATE2;
+    Os_info->cur_state = JCOP_UPDATE_STATE2;
+    *counter = OSU_GETINFO_STATE3;
+    break;
+  case JCOP_UPDATE_STATE_TRIGGER_APDU:
+    LOG(ERROR) << StringPrintf("Starting update from step1");
+    Os_info->index = JCOP_UPDATE_STATE0;
+    Os_info->cur_state = JCOP_UPDATE_STATE0;
+    *counter = OSU_GETINFO_STATE1;
+    break;
+  default:
+    LOG(ERROR) << StringPrintf("invalid state");
+    status = STATUS_FAILED;
+    break;
+  }
+
+  return status;
 }
 
 /*******************************************************************************
@@ -998,44 +1025,133 @@ tJBL_STATUS JcopOsDwnld::SetJcopOsState(JcopOs_ImageInfo_t *Os_info, uint8_t sta
     }
     else
     {
-        fprintf(fp, "%u", state);
-        fflush(fp);
-        LOG(ERROR) << StringPrintf("Current JcopOsState: %d", state);
-        status = STATUS_SUCCESS;
-    int fd=fileno(fp);
-    int ret = fdatasync(fd);
-        LOG(ERROR) << StringPrintf("ret value: %d", ret);
-        fclose(fp);
+      fprintf(fp, "%u", state);
+      fflush(fp);
+      DLOG_IF(INFO, nfc_debug_enabled)
+          << StringPrintf("Current JcopOsState: %d", state);
+      status = STATUS_SUCCESS;
+      int fd = fileno(fp);
+      int ret = fdatasync(fd);
+      DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf("ret value: %d", ret);
+      fclose(fp);
     }
     return status;
 }
 
-#if 0
-void *JcopOsDwnld::GetMemory(uint32_t size)
-{
-    void *pMem;
-    static const char fn [] = "JcopOsDwnld::GetMemory";
-    pMem = (void *)malloc(size);
+/*******************************************************************************
+**
+** Function:        Get_UAI_JcopOsState
+**
+** Description:     Get OSU state based on UAI query info
+**
+** Returns:         Success if ok.
+**
+*******************************************************************************/
+tJBL_STATUS
+JcopOsDwnld::Get_UAI_JcopOsState(JcopOs_ImageInfo_t *Os_info,
+                                 uint8_t *dh_osu_state,
+                                 JcopOs_TranscieveInfo_t *pTranscv_Info) {
+  static const char fn[] = "JcopOsDwnld::Get_UAI_JcopOsState";
+  tJBL_STATUS status = STATUS_SUCCESS;
+  IChannel_t *mchannel = gpJcopOs_Dwnld_Context->channel;
 
-    if(pMem != NULL)
-    {
-        memset(pMem, 0, size);
-    }
-    else
-    {
-        DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: memory allocation failed", fn);
-    }
-    return pMem;
+  if (!isUaiEnabled)
+    return status;
+
+  status = GetInfo(Os_info, status, pTranscv_Info);
+  if (status != STATUS_SUCCESS) {
+    DLOG_IF(ERROR, nfc_debug_enabled)
+        << StringPrintf("%s: Get UAI query Info failed", fn);
+    return status;
+  } else {
+    status = DeriveJcopOsu_State(Os_info, dh_osu_state);
+  }
+
+  mchannel->doeSE_JcopDownLoadReset();
+  return status;
 }
 
-void JcopOsDwnld::FreeMemory(void *pMem)
-{
-    if(pMem != NULL)
-    {
-        free(pMem);
-        pMem = NULL;
-    }
+/*******************************************************************************
+**
+** Function:        SetUAI_Data
+**
+** Description:     Update UAI info in OSU structure
+**
+** Returns:         None.
+**
+*******************************************************************************/
+void JcopOsDwnld::SetUAI_Data(JcopOs_ImageInfo_t *Os_info, uint8_t *pData) {
+  Os_info->uai_info.CSNData =
+      (pData[JCOP_UAI_CSN_INDEX] << 8 | pData[JCOP_UAI_CSN_INDEX + 1]);
+  Os_info->uai_info.RSNData =
+      (pData[JCOP_UAI_RSN_INDEX] << 8 | pData[JCOP_UAI_RSN_INDEX + 1]);
+  Os_info->uai_info.FSNData =
+      (pData[JCOP_UAI_FSN_INDEX] << 8 | pData[JCOP_UAI_FSN_INDEX + 1]);
+  Os_info->uai_info.OSIDData =
+      (pData[JCOP_UAI_OSID_INDEX] << 8 | pData[JCOP_UAI_OSID_INDEX + 1]);
 }
 
-#endif
+/*******************************************************************************
+**
+** Function:        DeriveOsu_State
+**
+** Description:     Used to derive the actual OSU state based on UAI query info
+**                  It compares DH state and updates in case of mismatch
+**
+** Returns:         Success if ok.
+**
+*******************************************************************************/
+tJBL_STATUS JcopOsDwnld::DeriveJcopOsu_State(JcopOs_ImageInfo_t *Os_info,
+                                             uint8_t *dh_osu_state) {
+  static const char fn[] = "JcopOsDwnld::DeriveJcopOsu_State";
+  tJBL_STATUS status = STATUS_SUCCESS;
+  uint16_t usCSN = 0;
+  uint16_t usRSN = 0;
+  uint16_t usFSN = 0;
+  uint16_t usUAI_OSID = OSID_0;
+  uint8_t jcop_osu_state = OSID_0;
+
+  usCSN = Os_info->uai_info.CSNData;
+  usRSN = Os_info->uai_info.RSNData;
+  usFSN = Os_info->uai_info.FSNData;
+  usUAI_OSID = Os_info->uai_info.OSIDData;
+
+  if (usUAI_OSID == OSID_JCOP) {
+    jcop_osu_state = JCOP_UPDATE_STATE0;
+  } else {
+    if (usUAI_OSID == OSID_1 && usCSN == usRSN) {
+      jcop_osu_state = JCOP_UPDATE_STATE_TRIGGER_APDU;
+    } else if ((usUAI_OSID == OSID_2) && (usCSN == usRSN ||
+               (usCSN == (usFSN - 2)))) {
+      jcop_osu_state = JCOP_UPDATE_STATE1;
+    } else if ((usUAI_OSID == OSID_SU1 && usCSN == usRSN) ||
+               (usCSN == (usFSN - 1))) {
+      jcop_osu_state = JCOP_UPDATE_STATE2;
+    } else {
+      DLOG_IF(ERROR, nfc_debug_enabled)
+          << StringPrintf("%s: Invalid data in query info shall retry", fn);
+      return STATUS_FAILED;
+    }
+  }
+  DLOG_IF(INFO, nfc_debug_enabled)
+      << StringPrintf("%s: JCOP OSU state = %d ", fn, jcop_osu_state);
+
+  if (*dh_osu_state != jcop_osu_state) {
+
+    if ((*dh_osu_state == JCOP_UPDATE_STATE2) &&
+        (jcop_osu_state == JCOP_UPDATE_STATE0)) {
+      jcop_osu_state = JCOP_UPDATE_STATE3;
+      SetJcopOsState(Os_info, jcop_osu_state);
+      DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
+          "%s: JCOP Already up to date = %d ", fn, jcop_osu_state);
+      return STATUS_UPTO_DATE;
+    }
+    SetJcopOsState(Os_info, jcop_osu_state);
+    *dh_osu_state = jcop_osu_state;
+  } else {
+    if (*dh_osu_state == JCOP_UPDATE_STATE0) {
+      SetJcopOsState(Os_info, jcop_osu_state);
+    }
+  }
+  return status;
+}

@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- *  Copyright 2018 NXP
+ *  Copyright 2018-2019 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ typedef struct Lsc_ImageInfo {
   int bytes_wrote;
   Lsc_ChannelInfo_t Channel_Info[10];
   uint8_t channel_cnt;
+  bool isUpdaterMode;
 } Lsc_ImageInfo_t;
 typedef enum {
   LS_Default = 0x00,
@@ -81,13 +82,13 @@ static uint8_t SelectLsc[] = {0xA4, 0x04, 0x00, 0x0E, 0xA0, 0x00,
                               0x00, 0x03, 0x96, 0x54, 0x43, 0x00, 0x00,
                               0x00, 0x01, 0x00, 0x0B, 0x00};
 
-static const uint8_t SelectSEMS[] = {0xA4, 0x04, 0x00, 0x0C, 0xA0, 0x00,
+static const uint8_t SelectSEMS[] = {0xA4, 0x04, 0x00, 0x0D, 0xA0, 0x00,
                                     0x00, 0x01, 0x51, 0x53, 0x45, 0x4D,
-                                    0x53, 0x00, 0x00, 0x00};
+                                    0x53, 0x00, 0x00, 0x00, 0x01};
 
-static const uint8_t SelectSEMSUpdater[] = {0xA4, 0x04, 0x00, 0x0C, 0xA0, 0x00,
+static const uint8_t SelectSEMSUpdater[] = {0xA4, 0x04, 0x00, 0x0D, 0xA0, 0x00,
                                     0x00, 0x01, 0x51, 0x53, 0x45, 0x4D,
-                                    0x53, 0xFF, 0xFF, 0xFF};
+                                    0x53, 0xFF, 0xFF, 0xFF, 0x01};
 #endif
 
 /*LSC2*/

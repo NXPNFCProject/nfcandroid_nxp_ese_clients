@@ -74,6 +74,7 @@ uint8_t getLsUpdateRequired();
 uint8_t getJcopUpdateIntf();
 uint8_t getLsUpdateIntf();
 bool geteSETerminalId(char*);
+bool getTruestedSETerminalId(char* val);
 bool geteUICCTerminalId(char*);
 bool getNfcSeTerminalId(char*);
 void setJcopUpdateRequired(uint8_t state);
