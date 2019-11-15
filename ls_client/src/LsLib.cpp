@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- *  Copyright 2018 NXP
+ *  Copyright 2018-2019 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -246,17 +246,18 @@ tLSC_STATUS LSC_OpenChannel(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
         memcpy(&lsExecuteResp[2], &rspApdu.p_data[rspApdu.len - 2], 2);
       status = STATUS_FAILED;
       ALOGE("%s: SE transceive failed status = 0x%X", fn, status);
-    } else if (((rspApdu.p_data[rspApdu.len - 2] != 0x90) &&
-                (rspApdu.p_data[rspApdu.len - 1] != 0x00))) {
-      memcpy(&lsExecuteResp[2], &rspApdu.p_data[rspApdu.len - 2], 2);
-      status = STATUS_FAILED;
-      ALOGE("%s: invalid response = 0x%X", fn, status);
-    } else {
+    } else if ((rspApdu.len >= 0x03) &&
+               ((rspApdu.p_data[rspApdu.len - 2] == 0x90) &&
+                (rspApdu.p_data[rspApdu.len - 1] == 0x00))) {
       uint8_t cnt = Os_info->channel_cnt;
       Os_info->Channel_Info[cnt].channel_id = rspApdu.p_data[rspApdu.len - 3];
       Os_info->Channel_Info[cnt].isOpend = true;
       Os_info->channel_cnt++;
       status = STATUS_OK;
+    } else {
+      memcpy(&lsExecuteResp[2], &rspApdu.p_data[rspApdu.len - 2], 2);
+      status = STATUS_FAILED;
+      ALOGE("%s: invalid response = 0x%X", fn, status);
     }
     phLS_free(cmdApdu.p_data);
   }
@@ -294,10 +295,18 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
 
   if(semsPresent)
   {
-    cmdApdu.len = (int32_t)(sizeof(SelectSEMS) + 1);
-    cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
-    cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
-    memcpy(&(cmdApdu.p_data[1]), SelectSEMS, sizeof(SelectSEMS));
+    if (Os_info->isUpdaterMode) {
+      cmdApdu.len = (int32_t)(AID_ARRAY[0]);
+      cmdApdu.p_data = (uint8_t *)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+      cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
+      memcpy(&(cmdApdu.p_data[1]), &AID_ARRAY[2], cmdApdu.len - 1);
+      Os_info->isUpdaterMode = false;
+    } else {
+      cmdApdu.len = (int32_t)(sizeof(SelectSEMS) + 1);
+      cmdApdu.p_data = (uint8_t *)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+      cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
+      memcpy(&(cmdApdu.p_data[1]), SelectSEMS, sizeof(SelectSEMS));
+    }
   }
   else
   {
@@ -1140,7 +1149,7 @@ tLSC_STATUS LSC_ProcessResp(Lsc_ImageInfo_t* image_info, int32_t recvlen,
     memcpy(&AID_ARRAY[6], &RecvData[0], recvlen - 2);
     //memcpy(&ArrayOfAIDs[2][0], &AID_ARRAY[0], recvlen + 4);
     memcpy(&ArrayOfAIDs[LS_SELF_UPDATE_AID_IDX][0], &AID_ARRAY[0], recvlen + 4);
-
+    image_info->isUpdaterMode = true;
     fAID_MEM = fopen(AID_MEM_PATH[gpLsc_Dwnld_Context->
       mchannel->getInterfaceInfo()], "w");
 
