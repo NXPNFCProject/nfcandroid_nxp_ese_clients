@@ -183,7 +183,7 @@ tLSC_STATUS LSC_update_seq_handler(
   ALOGD("%s: enter", fn);
 
   if (dest != NULL) {
-    strcat(update_info.fls_RespPath, dest);
+    strlcat(update_info.fls_RespPath, dest, sizeof(update_info.fls_RespPath));
     ALOGD("Loader Service response data path/destination: %s", dest);
     update_info.bytes_wrote = 0xAA;
   } else {
@@ -193,7 +193,7 @@ tLSC_STATUS LSC_update_seq_handler(
     return false;
   }
   // memcpy(update_info.fls_path, (char*)Lsc_path, sizeof(Lsc_path));
-  strcat(update_info.fls_path, name);
+  strlcat(update_info.fls_path, name, sizeof(update_info.fls_path));
   ALOGD("Selected applet to install is: %s", update_info.fls_path);
 
   while ((seq_handler[seq_counter]) != NULL) {
