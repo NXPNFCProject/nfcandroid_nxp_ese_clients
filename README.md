@@ -40,7 +40,7 @@ This Repo contains any additional information/files required to support the rele
 
 
 
-#### Supported Versions on "master" Branch 
+#### Supported Versions  Branch 
 
 | Android Version        | NXP Release          | NXP Tag  |
 | :-------------: |:---------------------:| :-----:|
@@ -53,7 +53,7 @@ This Repo contains any additional information/files required to support the rele
 | android-10.0.0_r2                |  10.00.0D (SN110x) |  NFC_AR_00_6000_10.00.0D_OpnSrc  |
 | android-10.0.0_r2                |  10.00.0F (SN110x) |  NFC_AR_00_6000_10.00.0F_OpnSrc  |
 | android-10.0.0_r2                |  10.00.14 (SN100x) |  NFC_AR_00_6000_10.00.14_OpnSrc  |
-
+| android-10.0.0_r2                |  10.00.15 (SN110x) |  NFC_AR_00_6000_10.00.15_OpnSrc  |
 
 
 
