@@ -438,7 +438,7 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
 *******************************************************************************/
 CNfcConfig::CNfcConfig()
     : mValidFile(true), config_crc32_(0), m_timeStamp(0), m_timeStampRF(0),
-      m_timeStampTransit(0), state(0) {}
+      m_timeStampTransit(0), mCurrentFile(""), state(0) {}
 
 /*******************************************************************************
 **
