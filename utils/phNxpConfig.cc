@@ -232,11 +232,13 @@ inline int getDigitValue(char c, int base) {
 *******************************************************************************/
 void findConfigFilePathFromTransportConfigPaths(const string& configName,
                                                 string& filePath) {
+  FILE *fd = NULL;
   for (int i = 0; i < transport_config_path_size - 1; i++) {
     filePath.assign(transport_config_paths[i]);
     filePath += configName;
-    struct stat file_stat;
-    if (stat(filePath.c_str(), &file_stat) == 0 && S_ISREG(file_stat.st_mode)) {
+    fd = fopen(config_timestamp_path, "r");
+    if (fd != NULL) {
+      fclose(fd);
       return;
     }
   }
@@ -773,8 +775,7 @@ void CNfcConfig::moveToList() {
 **
 *******************************************************************************/
 int CNfcConfig::checkTimestamp(const char* fileName, const char* fileNameTime) {
-  FILE* fd;
-  struct stat st;
+  FILE *fd = NULL;
   unsigned long value = 0, timeStamp = 0;
   int ret = 0;
   if (strcmp(config_timestamp_path, fileNameTime) == 0) {
@@ -785,8 +786,8 @@ int CNfcConfig::checkTimestamp(const char* fileName, const char* fileNameTime) {
     timeStamp = m_timeStampTransit;
   } else
     ALOGD("Invalid file \n");
-
-  if (stat(fileNameTime, &st) != 0) {
+  fd = fopen(fileNameTime, "r");
+  if (fd == NULL) {
     ALOGD("%s file not exist.\n", __func__);
     if ((fd = fopen(fileNameTime, "w+")) != NULL) {
       fwrite(&timeStamp, sizeof(unsigned long), 1, fd);
@@ -794,6 +795,7 @@ int CNfcConfig::checkTimestamp(const char* fileName, const char* fileNameTime) {
     }
     return 1;
   } else {
+    fclose(fd);
     fd = fopen(fileNameTime, "r+");
     if (fd == NULL) {
       ALOGE("%s Cannot open file %s\n", __func__, fileName);
@@ -822,12 +824,12 @@ int CNfcConfig::checkTimestamp(const char* fileName, const char* fileNameTime) {
 **
 *******************************************************************************/
 int CNfcConfig::updateTimestamp() {
-  FILE* fd;
-  struct stat st;
+  FILE *fd = NULL;
   unsigned long value = 0;
   int ret = 0;
 
-  if (stat(config_timestamp_path, &st) != 0) {
+  fd = fopen(config_timestamp_path, "r");
+  if (fd == NULL) {
     ALOGD("%s file %s not exist, creat it.\n", __func__, config_timestamp_path);
     fd = fopen(config_timestamp_path, "w+");
     if (fd != NULL) {
@@ -836,6 +838,7 @@ int CNfcConfig::updateTimestamp() {
     }
     return 1;
   } else {
+    fclose(fd);
     fd = fopen(config_timestamp_path, "r+");
     if (fd == NULL) {
       ALOGE("%s Cannot open file %s\n", __func__, config_timestamp_path);
