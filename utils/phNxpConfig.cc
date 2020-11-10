@@ -762,6 +762,24 @@ void CNfcConfig::moveToList() {
     m_list.push_back(*it);
   clear();
 }
+
+/*******************************************************************************
+**
+** Function:    isFilePresent()
+**
+** Description: To Check if the Input filepath is present is system.
+**
+** Returns:     true if file available else false.
+**
+*******************************************************************************/
+static bool isFilePresent(const char* filePath) {
+  struct stat st;
+  if (stat(filePath, &st) == 0) {
+    return true;
+  }
+  return false;
+}
+
 /*******************************************************************************
 **
 ** Function:    CNfcConfig::checkTimestamp(const char* fileName,const char*
@@ -774,7 +792,6 @@ void CNfcConfig::moveToList() {
 *******************************************************************************/
 int CNfcConfig::checkTimestamp(const char* fileName, const char* fileNameTime) {
   FILE* fd;
-  struct stat st;
   unsigned long value = 0, timeStamp = 0;
   int ret = 0;
   if (strcmp(config_timestamp_path, fileNameTime) == 0) {
@@ -786,7 +803,7 @@ int CNfcConfig::checkTimestamp(const char* fileName, const char* fileNameTime) {
   } else
     ALOGD("Invalid file \n");
 
-  if (stat(fileNameTime, &st) != 0) {
+  if (!isFilePresent(fileNameTime)) {
     ALOGD("%s file not exist.\n", __func__);
     if ((fd = fopen(fileNameTime, "w+")) != NULL) {
       fwrite(&timeStamp, sizeof(unsigned long), 1, fd);
@@ -823,11 +840,10 @@ int CNfcConfig::checkTimestamp(const char* fileName, const char* fileNameTime) {
 *******************************************************************************/
 int CNfcConfig::updateTimestamp() {
   FILE* fd;
-  struct stat st;
   unsigned long value = 0;
   int ret = 0;
 
-  if (stat(config_timestamp_path, &st) != 0) {
+  if (!isFilePresent(config_timestamp_path)) {
     ALOGD("%s file %s not exist, creat it.\n", __func__, config_timestamp_path);
     fd = fopen(config_timestamp_path, "w+");
     if (fd != NULL) {
