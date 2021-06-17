@@ -341,9 +341,18 @@ STATUS_JCOP_OSU JcDnld::GetInfo(JcopOs_ImageInfo_t *pImageInfo,
     mspSeChannelCallback->doEseHardReset();
     return status;
   }
-  memcpy(pImageInfo->fls_path,
-         (char *)OSU_APDU_FILE_PATH_LIST[pImageInfo->index],
-         strlen(OSU_APDU_FILE_PATH_LIST[pImageInfo->index]));
+  if (strlen(OSU_APDU_FILE_PATH_LIST[pImageInfo->index]) <
+      sizeof(pImageInfo->fls_path)) {
+    memcpy(pImageInfo->fls_path,
+           (char *)OSU_APDU_FILE_PATH_LIST[pImageInfo->index],
+           strlen(OSU_APDU_FILE_PATH_LIST[pImageInfo->index]));
+  } else {
+    DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
+        "%s: Copying failed as length of pImageInfo->fls_path is insufficient ",
+        __func__);
+    status = STATUS_FAILED;
+    return status;
+  }
 
   memset(pTranscv_Info->sSendData, 0, JCOP_MAX_BUF_SIZE);
   pTranscv_Info->sRecvlength = 1024;
@@ -374,8 +383,19 @@ STATUS_JCOP_OSU JcDnld::GetInfo(JcopOs_ImageInfo_t *pImageInfo,
         pTranscv_Info->sRecvData[recvBufferActualSize - 3];
     {
       LOG(ERROR) << StringPrintf("Starting 3-Step update");
-      memcpy(pImageInfo->fls_path, OSU_APDU_FILE_PATH_LIST[pImageInfo->index],
-             strlen(OSU_APDU_FILE_PATH_LIST[pImageInfo->index]) + 1);
+      if (strlen(OSU_APDU_FILE_PATH_LIST[pImageInfo->index]) <
+          sizeof(pImageInfo->fls_path)) {
+        memcpy(pImageInfo->fls_path, OSU_APDU_FILE_PATH_LIST[pImageInfo->index],
+               strlen(OSU_APDU_FILE_PATH_LIST[pImageInfo->index]) + 1);
+      } else {
+        DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
+            "%s: Copying failed as length of pImageInfo->fls_path is "
+            "insufficient ",
+            __func__);
+        status = STATUS_FAILED;
+        return status;
+      }
+
       pImageInfo->index++;
     }
     status = STATUS_SUCCESS;
