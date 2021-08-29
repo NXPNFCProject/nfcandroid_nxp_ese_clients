@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2019 NXP
+ *  Copyright 2021 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -51,6 +51,9 @@ eseUpdateInfo_t EseUpdateChecker::checkEseUpdateRequired(ESE_CLIENT_INTF intf) {
   bool isLsScriptPresent = true;
   struct stat st;
   eseUpdateInfo_t seUpdateInfo;
+#if (NXP_EXTNS == TRUE)
+  memset(&seUpdateInfo, 0, sizeof(eseUpdateInfo_t));
+#endif
   /*Check APDU files are present*/
   for (int num = 0; num < 3; num++) {
     if (stat(OSU_APDU_FILE_PATH_LIST[num], &st) != 0) {
