@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2019, 2022 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1176,6 +1176,7 @@ tLSC_STATUS LSC_ProcessResp(Lsc_ImageInfo_t* image_info, int32_t recvlen,
              ((sw[0] != 0x90) && (sw[0] != 0x63) && (sw[0] != 0x61))) {
     tLSC_STATUS wStatus = STATUS_FAILED;
     wStatus = Write_Response_To_OutFile(image_info, RecvData, recvlen, tType);
+    ALOGD("%s: wStatus=0x%x", fn, wStatus);
   }
   ALOGD("%s: exit: status=0x%x", fn, status);
   return status;
@@ -1278,11 +1279,8 @@ tLSC_STATUS Process_SelectRsp(uint8_t* Recv_data, int32_t Recv_len) {
         i = i + lsaVersionLen;
 
         if (Recv_data[i] == TAG_RE_KEYID) {
-          uint8_t rootEntityLen = 0;
-          i = i + 1;
-          rootEntityLen = Recv_data[i];
+          i = i + 2;  // rootEntityLen = Recv_data[i+1];
 
-          i = i + 1;
           if (Recv_data[i] == TAG_LSRE_ID) {
             uint8_t tag42Len = 0;
             i = i + 1;
@@ -1871,7 +1869,6 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
   tLSC_STATUS status = STATUS_FAILED;
   uint16_t offset = *offset1;
   int32_t wCertfLen = (read_buf[2] << 8 | read_buf[3]);
-  tLSC_STATUS certf_found = STATUS_FAILED;
   static const char fn[] = "Certificate_Verification";
   uint8_t tag_len_byte = Numof_lengthbytes(&read_buf[2], &wCertfLen);
 
@@ -1881,9 +1878,7 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
   pTranscv_Info->sSendData[3] = 0x00;
   /*If the certificate is less than 255 bytes*/
   if (wCertfLen <= 251) {
-    uint8_t tag7f49Off = 0;
     uint8_t u7f49Len = 0;
-    uint8_t tag5f37Len = 0;
     ALOGD("Certificate is greater than 255");
     offset = offset + *tag45Len;
     ALOGD("%s: Before TAG_CCM_PERMISSION = %x", fn, read_buf[offset]);
@@ -1896,7 +1891,6 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
       ALOGD("%s: Verified TAG TAG_CCM_PERMISSION = 0x53", fn);
       if ((uint16_t)(read_buf[offset] << 8 | read_buf[offset + 1]) ==
           TAG_SIG_RNS_COMP) {
-        tag7f49Off = offset;
         u7f49Len = read_buf[offset + 2];
         offset = offset + 3 + u7f49Len;
         if (u7f49Len != 64) {
@@ -1904,7 +1898,6 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
         }
         if ((uint16_t)(read_buf[offset] << 8 | read_buf[offset + 1]) ==
             0x7f49) {
-          tag5f37Len = read_buf[offset + 2];
           if (read_buf[offset + 3] != 0x86 || (read_buf[offset + 4] != 65)) {
             return STATUS_FAILED;
           }
@@ -1927,7 +1920,6 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
     if (status != STATUS_OK) {
       return status;
     } else {
-      certf_found = STATUS_OK;
       ALOGD("Certificate is verified");
       return status;
     }
@@ -1990,7 +1982,6 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
           return status;
         } else {
           ALOGD("Certificate is verified");
-          certf_found = STATUS_OK;
           return status;
         }
       } else {
