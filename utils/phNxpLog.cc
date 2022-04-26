@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2019 NXP
+ *  Copyright 2019, 2022 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -62,8 +62,8 @@ static uint8_t phNxpLog_SetGlobalLogLevel(void) {
   int len = property_get(PROP_NAME_NXPLOG_GLOBAL_LOGLEVEL, valueStr, "");
   if (len > 0) {
     /* let Android property override .conf variable */
-    sscanf(valueStr, "%lu", &num);
-    level = (unsigned char)num;
+    int ret = sscanf(valueStr, "%lu", &num);
+    if (ret) level = (unsigned char)num;
   }
   memset(&gLog_level, level, sizeof(nci_log_level_t));
   return level;
@@ -92,8 +92,8 @@ static void phNxpLog_SetHALLogLevel(uint8_t level) {
   len = property_get(PROP_NAME_NXPLOG_HAL_LOGLEVEL, valueStr, "");
   if (len > 0) {
     /* let Android property override .conf variable */
-    sscanf(valueStr, "%lu", &num);
-    gLog_level.hal_log_level = (unsigned char)num;
+    int ret = sscanf(valueStr, "%lu", &num);
+    if (ret) gLog_level.hal_log_level = (unsigned char)num;
   }
 }
 
@@ -119,8 +119,8 @@ static void phNxpLog_SetExtnsLogLevel(uint8_t level) {
   len = property_get(PROP_NAME_NXPLOG_EXTNS_LOGLEVEL, valueStr, "");
   if (len > 0) {
     /* let Android property override .conf variable */
-    sscanf(valueStr, "%lu", &num);
-    gLog_level.extns_log_level = (unsigned char)num;
+    int ret = sscanf(valueStr, "%lu", &num);
+    if (ret) gLog_level.extns_log_level = (unsigned char)num;
   }
 }
 
@@ -146,8 +146,8 @@ static void phNxpLog_SetTmlLogLevel(uint8_t level) {
   len = property_get(PROP_NAME_NXPLOG_TML_LOGLEVEL, valueStr, "");
   if (len > 0) {
     /* let Android property override .conf variable */
-    sscanf(valueStr, "%lu", &num);
-    gLog_level.tml_log_level = (unsigned char)num;
+    int ret = sscanf(valueStr, "%lu", &num);
+    if (ret) gLog_level.tml_log_level = (unsigned char)num;
   }
 }
 
@@ -173,8 +173,8 @@ static void phNxpLog_SetDnldLogLevel(uint8_t level) {
   len = property_get(PROP_NAME_NXPLOG_FWDNLD_LOGLEVEL, valueStr, "");
   if (len > 0) {
     /* let Android property override .conf variable */
-    sscanf(valueStr, "%lu", &num);
-    gLog_level.dnld_log_level = (unsigned char)num;
+    int ret = sscanf(valueStr, "%lu", &num);
+    if (ret) gLog_level.dnld_log_level = (unsigned char)num;
   }
 }
 
@@ -204,9 +204,11 @@ static void phNxpLog_SetNciTxLogLevel(uint8_t level) {
   len = property_get(PROP_NAME_NXPLOG_NCI_LOGLEVEL, valueStr, "");
   if (len > 0) {
     /* let Android property override .conf variable */
-    sscanf(valueStr, "%lu", &num);
-    gLog_level.ncix_log_level = (unsigned char)num;
-    gLog_level.ncir_log_level = (unsigned char)num;
+    int ret = sscanf(valueStr, "%lu", &num);
+    if (ret) {
+      gLog_level.ncix_log_level = (unsigned char)num;
+      gLog_level.ncir_log_level = (unsigned char)num;
+    }
   }
 }
 
