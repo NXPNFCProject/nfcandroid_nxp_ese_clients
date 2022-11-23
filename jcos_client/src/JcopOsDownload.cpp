@@ -377,14 +377,14 @@ tJBL_STATUS JcopOsDwnld::TriggerApdu(JcopOs_ImageInfo_t* pVersionInfo, tJBL_STAT
                (pTranscv_Info->sRecvData[recvBufferActualSize-1] == 0x00)))
         {
             mchannel->doeSE_JcopDownLoadReset();
-            status = STATUS_OK;
+            status = STATUS_OKAY;
             DLOG_IF(INFO, nfc_debug_enabled)
       << StringPrintf("%s: Trigger APDU Transceive status = 0x%X", fn, status);
         }
         else
         {
             /* status {90, 00} */
-            status = STATUS_OK;
+            status = STATUS_OKAY;
         }
     }
     DLOG_IF(INFO, nfc_debug_enabled)
@@ -620,7 +620,7 @@ tJBL_STATUS JcopOsDwnld::UaiTriggerApdu(JcopOs_ImageInfo_t* pVersionInfo, tJBL_S
                (pTranscv_Info->sRecvData[recvBufferActualSize-1] == 0x00)))
         {
             /*mchannel->doeSE_JcopDownLoadReset();*/
-            status = STATUS_OK;
+            status = STATUS_OKAY;
             DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf
                 ("%s: Trigger APDU Transceive status = 0x%X", fn, status);
         }
@@ -711,7 +711,7 @@ tJBL_STATUS JcopOsDwnld::GetInfo(JcopOs_ImageInfo_t* pImageInfo, tJBL_STATUS sta
                  strlen(path[pImageInfo->index]) + 1);
 
           pImageInfo->index++;
-          status = STATUS_OK;
+          status = STATUS_OKAY;
 
           DLOG_IF(INFO, nfc_debug_enabled) << StringPrintf(
               "%s: GetInfo Transceive status = 0x%X", fn, status);

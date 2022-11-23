@@ -82,7 +82,7 @@ tJBL_STATUS JCDNLD_Init(IChannel_t *channel)
             stat = false;
         }
     }
-    return (stat == true)?STATUS_OK:STATUS_FAILED;
+    return (stat == true)?STATUS_OKAY:STATUS_FAILED;
 }
 
 /*******************************************************************************

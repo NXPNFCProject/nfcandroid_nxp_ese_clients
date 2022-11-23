@@ -27,7 +27,7 @@ extern "C" {
 #define LSCLIENT_H_
 
 #define STATUS_SUCCESS 0x00
-#define STATUS_OK 0x00
+#define STATUS_OKAY 0x00
 #define STATUS_FAILED 0x03
 #define STATUS_FILE_NOT_FOUND 0x05
 

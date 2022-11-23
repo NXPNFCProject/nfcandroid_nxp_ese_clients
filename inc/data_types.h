@@ -46,7 +46,7 @@ typedef uint32_t        TIME_STAMP;
 typedef unsigned char   UBYTE;
 
 #define STATUS_SUCCESS     0x00
-#define STATUS_OK          0x00
+#define STATUS_OKAY          0x00
 #define STATUS_UPTO_DATE   0x01
 #define STATUS_FAILED      0x03
 #define STATUS_INUSE       0x04
