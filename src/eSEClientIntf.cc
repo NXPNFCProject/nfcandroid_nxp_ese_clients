@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2019, 2023 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,8 +21,10 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <pthread.h>
+#if NXP_BOOTTIME_UPDATE
 #include <IChannel.h>
 #include <JcDnld.h>
+#endif
 #include <unistd.h>
 #include <sys/stat.h>
 #include <phNxpConfig.h>
@@ -32,6 +34,7 @@
 
 #define TERMINAL_LEN  5
 bool nfc_debug_enabled;
+#ifdef NXP_BOOTTIME_UPDATE
 void* performJCOS_Download_thread(void* data);
 IChannel_t Ch;
 static const char *path[3] = {"/vendor/etc/JcopOs_Update1.apdu",
@@ -247,6 +250,7 @@ void setLsUpdateRequired(uint8_t  state)
   seExtn.isLSUpdateRequired = state;
 }
 
+#endif
 bool geteSETerminalId(char* val)
 {
   bool ret = false;

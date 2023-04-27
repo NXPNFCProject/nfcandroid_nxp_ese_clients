@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- *  Copyright 2018 NXP
+ *  Copyright 2018, 2023 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <string>
 
+#ifdef NXP_BOOTTIME_UPDATE
 #define SEMS_STATUS_FAILED_SW1 0x63
 #define SEMS_STATUS_FAILED_SW2 0x40
 
@@ -73,10 +74,12 @@ uint8_t getJcopUpdateRequired();
 uint8_t getLsUpdateRequired();
 uint8_t getJcopUpdateIntf();
 uint8_t getLsUpdateIntf();
+void setJcopUpdateRequired(uint8_t state);
+void setLsUpdateRequired(uint8_t  state);
+#endif
+
 bool geteSETerminalId(char*);
 bool getTruestedSETerminalId(char* val);
 bool geteUICCTerminalId(char*);
 bool getNfcSeTerminalId(char*);
-void setJcopUpdateRequired(uint8_t state);
-void setLsUpdateRequired(uint8_t  state);
 #endif /* CLIENT_INTF_H_ */
