@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014, 2022 NXP
+ * Copyright 2010-2014, 2022-2023 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 
 const char* NXPLOG_ITEM_EXTNS = "NxpExtns";
 const char* NXPLOG_ITEM_NCIHAL = "NxpHal";
+#ifdef NXP_BOOTTIME_UPDATE
 const char* NXPLOG_ITEM_NCIX = "NxpNciX";
 const char* NXPLOG_ITEM_NCIR = "NxpNciR";
 const char* NXPLOG_ITEM_FWDNLD = "NxpFwDnld";
@@ -34,12 +35,12 @@ const char* NXPLOG_ITEM_TML = "NxpTml";
 const char* NXPLOG_ITEM_HCPX = "NxpHcpX";
 const char* NXPLOG_ITEM_HCPR = "NxpHcpR";
 #endif /*NXP_HCI_REQ*/
-
+#endif /* NXP_BOOTTIME_UPDATE */
 /* global log level structure */
 nci_log_level_t gLog_level;
 
 extern bool nfc_debug_enabled;
-
+#ifdef NXP_BOOTTIME_UPDATE
 /*******************************************************************************
  *
  * Function         phNxpLog_SetGlobalLogLevel
@@ -255,3 +256,4 @@ void phNxpLog_InitializeLogLevel(void) {
       gLog_level.tml_log_level, gLog_level.ncir_log_level,
       gLog_level.ncix_log_level);
 }
+#endif /* NXP_BOOTTIME_UPDATE */

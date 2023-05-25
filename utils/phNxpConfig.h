@@ -20,7 +20,7 @@
  *
  *  The original Work has been changed by NXP.
  *
- *  Copyright 2013-2018,2020 NXP
+ *  Copyright 2013-2018,2020,2023 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ extern "C" {
 #endif
 
 int GetNxpStrValue(const char* name, char* p_value, unsigned long len);
+#ifdef NXP_BOOTTIME_UPDATE
 int GetNxpNumValue(const char* name, void* p_value, unsigned long len);
 int GetNxpByteArrayValue(const char* name, char* pValue, long bufflen,
                          long* len);
@@ -51,11 +52,13 @@ void resetNxpConfig(void);
 int isNxpRFConfigModified();
 int isNxpConfigModified();
 int updateNxpConfigTimestamp();
+#endif
 
 #ifdef __cplusplus
 };
 #endif
 
+#ifdef NXP_BOOTTIME_UPDATE
 #define NAME_NXPLOG_EXTNS_LOGLEVEL "NXPLOG_EXTNS_LOGLEVEL"
 #define NAME_NXPLOG_NCIHAL_LOGLEVEL "NXPLOG_NCIHAL_LOGLEVEL"
 #define NAME_NXPLOG_NCIX_LOGLEVEL "NXPLOG_NCIX_LOGLEVEL"
@@ -133,9 +136,9 @@ int updateNxpConfigTimestamp();
 #define NAME_NXP_SEMS_SUPPORTED "NXP_GP_AMD_I_SEMS_SUPPORTED"
 #define NAME_NXP_SPI_SE_TERMINAL_NUM "NXP_SPI_SE_TERMINAL_NUM"
 #define NAME_NXP_VISO_SE_TERMINAL_NUM "NXP_VISO_SE_TERMINAL_NUM"
+#endif /* NXP_BOOTTIME_UPDATE */
 #define NAME_NXP_NFC_SE_TERMINAL_NUM "NXP_NFC_SE_TERMINAL_NUM"
 #define NAME_NXP_TRUSTED_SE_TERMINAL_NUM "NXP_TRUSTED_SE_TERMINAL_NUM"
 /* default configuration */
 #define default_storage_location "/data/vendor/nfc"
-
-#endif
+#endif /* __CONFIG_H */

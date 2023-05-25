@@ -250,7 +250,6 @@ void setLsUpdateRequired(uint8_t  state)
   seExtn.isLSUpdateRequired = state;
 }
 
-#endif
 bool geteSETerminalId(char* val)
 {
   bool ret = false;
@@ -265,6 +264,19 @@ bool geteSETerminalId(char* val)
   return ret;
 }
 
+bool geteUICCTerminalId(char* val)
+{
+  bool ret = false;
+
+  if(GetNxpStrValue(NAME_NXP_VISO_SE_TERMINAL_NUM, val, TERMINAL_LEN))
+  {
+    ALOGE("eUICCTerminalId found val = %s ", val);
+    ret = true;
+  }
+  return ret;
+}
+#endif /* NXP_BOOTTIME_UPDATE */
+
 bool getTruestedSETerminalId(char* val)
 {
   bool ret = false;
@@ -274,18 +286,6 @@ bool getTruestedSETerminalId(char* val)
     LOG(INFO) <<"TrustedSE TerminalId found";
     ALOGD("TrustedSE TerminalId found val = %s ", val);
 
-    ret = true;
-  }
-  return ret;
-}
-
-bool geteUICCTerminalId(char* val)
-{
-  bool ret = false;
-
-  if(GetNxpStrValue(NAME_NXP_VISO_SE_TERMINAL_NUM, val, TERMINAL_LEN))
-  {
-    ALOGE("eUICCTerminalId found val = %s ", val);
     ret = true;
   }
   return ret;

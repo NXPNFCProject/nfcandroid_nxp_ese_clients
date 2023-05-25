@@ -15,13 +15,12 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
 #ifndef CLIENT_INTF_H_
 #define CLIENT_INTF_H_
+#ifdef NXP_BOOTTIME_UPDATE
 #include <pthread.h>
 #include <string>
 
-#ifdef NXP_BOOTTIME_UPDATE
 #define SEMS_STATUS_FAILED_SW1 0x63
 #define SEMS_STATUS_FAILED_SW2 0x40
 
@@ -76,10 +75,10 @@ uint8_t getJcopUpdateIntf();
 uint8_t getLsUpdateIntf();
 void setJcopUpdateRequired(uint8_t state);
 void setLsUpdateRequired(uint8_t  state);
-#endif
 
 bool geteSETerminalId(char*);
-bool getTruestedSETerminalId(char* val);
 bool geteUICCTerminalId(char*);
+#endif /* NXP_BOOTTIME_UPDATE */
+bool getTruestedSETerminalId(char* val);
 bool getNfcSeTerminalId(char*);
 #endif /* CLIENT_INTF_H_ */

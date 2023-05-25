@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2014 NXP Semiconductors
+ * Copyright 2010-2014, 2023 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ extern nci_log_level_t gLog_level;
 extern bool nfc_debug_enabled;
 /* define log module included when compile */
 #define ENABLE_EXTNS_TRACES TRUE
+#ifdef NXP_BOOTTIME_UPDATE
 #define ENABLE_HAL_TRACES TRUE
 #define ENABLE_TML_TRACES TRUE
 #define ENABLE_FWDNLD_TRACES TRUE
@@ -63,8 +64,9 @@ extern bool nfc_debug_enabled;
 /* ####################### Set the logging level for EVERY COMPONENT here
  * ######################## :START: */
 #define NXPLOG_LOG_SILENT_LOGLEVEL 0x00
-#define NXPLOG_LOG_ERROR_LOGLEVEL 0x01
 #define NXPLOG_LOG_WARN_LOGLEVEL 0x02
+#endif
+#define NXPLOG_LOG_ERROR_LOGLEVEL 0x01
 #define NXPLOG_LOG_DEBUG_LOGLEVEL 0x03
 /* ####################### Set the default logging level for EVERY COMPONENT
  * here ########################## :END: */
@@ -81,6 +83,7 @@ extern bool nfc_debug_enabled;
 
 extern const char* NXPLOG_ITEM_EXTNS;  /* Android logging tag for NxpExtns  */
 extern const char* NXPLOG_ITEM_NCIHAL; /* Android logging tag for NxpNciHal */
+#ifdef NXP_BOOTTIME_UPDATE
 extern const char* NXPLOG_ITEM_NCIX;   /* Android logging tag for NxpNciX   */
 extern const char* NXPLOG_ITEM_NCIR;   /* Android logging tag for NxpNciR   */
 extern const char* NXPLOG_ITEM_FWDNLD; /* Android logging tag for NxpFwDnld */
@@ -99,7 +102,7 @@ extern const char* NXPLOG_ITEM_HCPR; /* Android logging tag for NxpHcpR   */
 #define NXPLOG_FUNC_EXIT(COMP) \
   LOG_PRI(ANDROID_LOG_VERBOSE, (COMP), "-:%s", (__func__))
 #endif /*NXP_VRBS_REQ*/
-
+#endif /* NXP_BOOTTIME_UPDATE */
 /* ################################################################################################################
  */
 /* ######################################## Logging APIs of actual modules
@@ -107,6 +110,7 @@ extern const char* NXPLOG_ITEM_HCPR; /* Android logging tag for NxpHcpR   */
 /* ################################################################################################################
  */
 /* Logging APIs used by NxpExtns module */
+#ifdef NXP_BOOTTIME_UPDATE
 #if (ENABLE_EXTNS_TRACES == TRUE)
 #define NXPLOG_EXTNS_D(...)                                       \
   {                                                               \
@@ -130,6 +134,14 @@ extern const char* NXPLOG_ITEM_HCPR; /* Android logging tag for NxpHcpR   */
 #define NXPLOG_EXTNS_W(...)
 #define NXPLOG_EXTNS_E(...)
 #endif /* Logging APIs used by NxpExtns module */
+#else
+#define NXPLOG_EXTNS_D(...)                                       \
+  {                                                               \
+     if ((nfc_debug_enabled) ||                                   \
+      (gLog_level.extns_log_level >= NXPLOG_LOG_DEBUG_LOGLEVEL))  \
+      LOG_PRI(ANDROID_LOG_DEBUG, NXPLOG_ITEM_EXTNS, __VA_ARGS__); \
+  }
+#endif /* NXP_BOOTTIME_UPDATE */
 
 /* Logging APIs used by NxpNciHal module */
 #if (ENABLE_HAL_TRACES == TRUE)
@@ -155,6 +167,7 @@ extern const char* NXPLOG_ITEM_HCPR; /* Android logging tag for NxpHcpR   */
 #define NXPLOG_NCIHAL_W(...)
 #define NXPLOG_NCIHAL_E(...)
 #endif /* Logging APIs used by HAL module */
+#ifdef NXP_BOOTTIME_UPDATE
 
 /* Logging APIs used by NxpNciX module */
 #if (ENABLE_NCIX_TRACES == TRUE)
@@ -363,5 +376,5 @@ extern const char* NXPLOG_ITEM_HCPR; /* Android logging tag for NxpHcpR   */
 #endif /* NXP_VRBS_REQ */
 
 void phNxpLog_InitializeLogLevel(void);
-
+#endif /* NXP_BOOTTIME_UPDATE */
 #endif /* NXPLOG__H_INCLUDED */

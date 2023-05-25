@@ -18,9 +18,9 @@
 
 /******************************************************************************
  *
- *  The original Work has been changed by NXP Semiconductors.
+ *  The original Work has been changed by NXP.
  *
- *  Copyright (C) 2013-2020 NXP Semiconductors
+ *  Copyright 2013-2020, 2023 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -65,19 +65,20 @@ const int transport_config_path_size =
 #define extra_config_ext ".conf"
 #define IsStringValue 0x80000000
 
+#ifdef NXP_BOOTTIME_UPDATE
 const char rf_config_timestamp_path[] =
-        "/data/vendor/nfc/libnfc-nxpRFConfigState.bin";
+    "/data/vendor/nfc/libnfc-nxpRFConfigState.bin";
 const char tr_config_timestamp_path[] =
     "/data/vendor/nfc/libnfc-nxpTransitConfigState.bin";
 const char config_timestamp_path[] =
-        "/data/vendor/nfc/libnfc-nxpConfigState.bin";
+    "/data/vendor/nfc/libnfc-nxpConfigState.bin";
 /*const char default_nxp_config_path[] =
         "/vendor/etc/libnfc-nxp.conf";*/
 const char nxp_rf_config_path[] =
         "/system/vendor/libnfc-nxp_RF.conf";
 const char transit_config_path[] = "/data/vendor/nfc/libnfc-nxpTransit.conf";
 void readOptionalConfig(const char* optional);
-
+#endif
 namespace {
 
 size_t readConfigFile(const char* fileName, uint8_t** p_data) {
@@ -132,19 +133,21 @@ class CNfcConfig : public vector<const CNfcParam*> {
   virtual ~CNfcConfig();
   static CNfcConfig& GetInstance();
   friend void readOptionalConfig(const char* optional);
+#ifdef NXP_BOOTTIME_UPDATE
   bool isModified();
   void resetModified();
   int updateTimestamp();
   int checkTimestamp(const char* fileName, const char* fileTimeStamp);
 
-  bool getValue(const char* name, char* pValue, size_t len) const;
+  bool getValue(const char* name, char* pValue, long len, long* readlen) const;
   bool getValue(const char* name, unsigned long& rValue) const;
   bool getValue(const char* name, unsigned short& rValue) const;
-  bool getValue(const char* name, char* pValue, long len, long* readlen) const;
+#endif
+  void clean();
+  bool getValue(const char* name, char* pValue, size_t len) const;
   const CNfcParam* find(const char* p_name) const;
   void readNxpTransitConfig(const char* fileName) const;
   void readNxpRFConfig(const char* fileName) const;
-  void clean();
 
  private:
   CNfcConfig();
@@ -152,14 +155,18 @@ class CNfcConfig : public vector<const CNfcParam*> {
   void moveFromList();
   void moveToList();
   void add(const CNfcParam* pParam);
+#ifdef NXP_BOOTTIME_UPDATE
   void dump();
+#endif
   bool isAllowed(const char* name);
   list<const CNfcParam*> m_list;
   bool mValidFile;
   uint32_t config_crc32_;
+#ifdef NXP_BOOTTIME_UPDATE
   unsigned long m_timeStamp;
   unsigned long m_timeStampRF;
   unsigned long m_timeStampTransit;
+#endif
   string mCurrentFile;
 
   unsigned long state;
@@ -439,9 +446,11 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
 CNfcConfig::CNfcConfig()
     : mValidFile(true),
       config_crc32_(0),
+#ifdef NXP_BOOTTIME_UPDATE
       m_timeStamp(0),
       m_timeStampRF(0),
       m_timeStampTransit(0),
+#endif
       state(0) {}
 
 /*******************************************************************************
@@ -479,7 +488,7 @@ CNfcConfig& CNfcConfig::GetInstance() {
     }
     findConfigFilePathFromTransportConfigPaths(config_name, strPath);
     theInstance.readConfig(strPath.c_str(), true);
-#if (NXP_EXTNS == TRUE)
+#ifdef NXP_BOOTTIME_UPDATE
     readOptionalConfig("brcm");
     theInstance.readNxpTransitConfig(transit_config_path);
     theInstance.readNxpRFConfig(nxp_rf_config_path);
@@ -511,6 +520,7 @@ bool CNfcConfig::getValue(const char* name, char* pValue, size_t len) const {
   return false;
 }
 
+#ifdef NXP_BOOTTIME_UPDATE
 bool CNfcConfig::getValue(const char* name, char* pValue, long len,
                           long* readlen) const {
   const CNfcParam* pParam = find(name);
@@ -571,6 +581,7 @@ bool CNfcConfig::getValue(const char* name, unsigned short& rValue) const {
   }
   return false;
 }
+#endif
 
 /*******************************************************************************
 **
@@ -602,6 +613,7 @@ const CNfcParam* CNfcConfig::find(const char* p_name) const {
   return NULL;
 }
 
+#ifdef NXP_BOOTTIME_UPDATE
 /*******************************************************************************
 **
 ** Function:    CNfcConfig::readNxpTransitConfig()
@@ -629,6 +641,7 @@ void CNfcConfig::readNxpRFConfig(const char* fileName) const {
   ALOGD("readNxpRFConfig-Enter..Reading %s", fileName);
   CNfcConfig::GetInstance().readConfig(fileName, false);
 }
+#endif
 
 /*******************************************************************************
 **
@@ -678,6 +691,7 @@ void CNfcConfig::add(const CNfcParam* pParam) {
   }
   m_list.push_back(pParam);
 }
+#ifdef NXP_BOOTTIME_UPDATE
 /*******************************************************************************
 **
 ** Function:    CNfcConfig::dump()
@@ -700,6 +714,7 @@ void CNfcConfig::dump() {
             (*it)->numValue());
   }
 }
+#endif
 /*******************************************************************************
 **
 ** Function:    CNfcConfig::isAllowed()
@@ -763,6 +778,7 @@ void CNfcConfig::moveToList() {
   clear();
 }
 
+#ifdef NXP_BOOTTIME_UPDATE
 /*******************************************************************************
 **
 ** Function:    isFilePresent()
@@ -900,6 +916,7 @@ void CNfcConfig::resetModified() {
   fclose(fd);
 }
 
+#endif
 /*******************************************************************************
 **
 ** Function:    CNfcParam::CNfcParam()
@@ -946,6 +963,7 @@ CNfcParam::CNfcParam(const char* name, const string& value)
 CNfcParam::CNfcParam(const char* name, unsigned long value)
     : string(name), m_numValue(value) {}
 
+#ifdef NXP_BOOTTIME_UPDATE
 /*******************************************************************************
 **
 ** Function:    readOptionalConfig()
@@ -970,7 +988,7 @@ void readOptionalConfig(const char* extra) {
 
   CNfcConfig::GetInstance().readConfig(strPath.c_str(), false);
 }
-
+#endif
 /*******************************************************************************
 **
 ** Function:    GetStrValue
@@ -987,6 +1005,7 @@ extern "C" int GetNxpStrValue(const char* name, char* pValue,
   return rConfig.getValue(name, pValue, len);
 }
 
+#ifdef NXP_BOOTTIME_UPDATE
 /*******************************************************************************
 **
 ** Function:    GetByteArrayValue()
@@ -1117,3 +1136,4 @@ extern "C" int updateNxpConfigTimestamp() {
   rConfig.resetModified();
   return 0;
 }
+#endif
