@@ -294,11 +294,17 @@ bool getTruestedSETerminalId(char* val)
 bool getNfcSeTerminalId(char* val)
 {
   bool ret = false;
+  unsigned long int num = 0;
 
   if(GetNxpStrValue(NAME_NXP_NFC_SE_TERMINAL_NUM, val, TERMINAL_LEN))
   {
     ALOGE("NfcSeTerminalId found val = %s ", val);
-    ret = true;
+    if(!GetNxpNumValue(NAME_NXP_SE_SMB_TERMINAL_TYPE, &num, sizeof(num))) {
+      ret = true;
+    }
+    if(num != 0) {
+      ret = true;
+    }
   }
   return ret;
 }

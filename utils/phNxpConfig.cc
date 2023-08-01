@@ -1029,7 +1029,7 @@ extern "C" int GetNxpByteArrayValue(const char* name, char* pValue,
 
   return rConfig.getValue(name, pValue, bufflen, len);
 }
-
+#endif
 /*******************************************************************************
 **
 ** Function:    GetNumValue
@@ -1071,6 +1071,7 @@ extern "C" int GetNxpNumValue(const char* name, void* pValue,
   return true;
 }
 
+#ifdef NXP_BOOTTIME_UPDATE
 /*******************************************************************************
 **
 ** Function:    resetConfig

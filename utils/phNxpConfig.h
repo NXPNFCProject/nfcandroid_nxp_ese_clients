@@ -44,8 +44,8 @@ extern "C" {
 #endif
 
 int GetNxpStrValue(const char* name, char* p_value, unsigned long len);
-#ifdef NXP_BOOTTIME_UPDATE
 int GetNxpNumValue(const char* name, void* p_value, unsigned long len);
+#ifdef NXP_BOOTTIME_UPDATE
 int GetNxpByteArrayValue(const char* name, char* pValue, long bufflen,
                          long* len);
 void resetNxpConfig(void);
@@ -137,6 +137,7 @@ int updateNxpConfigTimestamp();
 #define NAME_NXP_SPI_SE_TERMINAL_NUM "NXP_SPI_SE_TERMINAL_NUM"
 #define NAME_NXP_VISO_SE_TERMINAL_NUM "NXP_VISO_SE_TERMINAL_NUM"
 #endif /* NXP_BOOTTIME_UPDATE */
+#define NAME_NXP_SE_SMB_TERMINAL_TYPE "NXP_SE_SMB_TERMINAL_TYPE"
 #define NAME_NXP_NFC_SE_TERMINAL_NUM "NXP_NFC_SE_TERMINAL_NUM"
 #define NAME_NXP_TRUSTED_SE_TERMINAL_NUM "NXP_TRUSTED_SE_TERMINAL_NUM"
 /* default configuration */
