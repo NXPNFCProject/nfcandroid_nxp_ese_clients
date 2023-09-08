@@ -82,3 +82,4 @@ bool geteUICCTerminalId(char*);
 bool getTruestedSETerminalId(char* val);
 bool getNfcSeTerminalId(char*);
 #endif /* CLIENT_INTF_H_ */
+
