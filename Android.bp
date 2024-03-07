@@ -40,7 +40,6 @@ cc_library_shared {
         "libhidlbase",
         "liblog",
         "libutils",
-        "libchrome",
         "libdl",
         "libhidlbase",
     ],
