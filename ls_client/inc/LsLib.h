@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2019, 2025 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -20,10 +20,15 @@
 #define LSC_H_
 
 #define NXP_LS_AID
-#include "LsClient.h"
 #include <stdio.h>
-#include "../../inc/IChannel.h"
-#include "phNxpConfig.h"
+#include "IChannel.h"
+#include "LsClient.h"
+
+#include <iomanip>
+#include <iostream>
+#include <ostream>
+#include <sstream>
+#include <vector>
 
 typedef struct Lsc_ChannelInfo {
   uint8_t channel_id;
@@ -176,8 +181,9 @@ static uint8_t ArrayOfAIDs[NOOFAIDS][LENOFAIDS] = {
 #define STORE_DATA_TAG 0x4F
 static const char *AID_MEM_PATH[2] = {"/data/vendor/nfc/AID_MEM.txt",
                                   "/data/vendor/secure_element/AID_MEM.txt"};
-static const char *LS_STATUS_PATH[2] = {"/data/vendor/nfc/LS_Status.txt",
-                                  "/data/vendor/secure_element/LS_Status.txt"};
+static const char* LS_STATUS_PATH[2] = {
+    "/data/vendor/nfc/LS_Status.txt",
+    "/data/vendor/secure_element/LS_Status.txt"};
 
 /*******************************************************************************
 **
@@ -540,6 +546,39 @@ tLSC_STATUS Bufferize_load_cmds(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
                                 Lsc_TranscieveInfo_t* pTranscv_Info);
 #endif
 
+/*******************************************************************************
+** Function:        LsLib_SelectSemsAID
+**
+** Description:     Selects SEMS AID. Used by Update client directly
+**
+** Returns:         SUCCESS if ok
+**
+*******************************************************************************/
+tLSC_STATUS LsLib_SelectSemsAID();
+
+/*******************************************************************************
+**
+** Function:        LsLib_SendCmd
+**
+** Description:     Send Non-secure cmd to SEMS
+**
+** Returns:         response apdu
+**
+*******************************************************************************/
+tLSC_STATUS LsLib_SendCmd(uint8_t INS, uint8_t p2,
+                          std::vector<uint8_t>& response);
+
+/*******************************************************************************
+**
+** Function:        LsLib_SemsDeSelect
+**
+** Description:     De-selects SEMS AID
+**
+** Returns:         SUCCESS if ok
+**
+*******************************************************************************/
+tLSC_STATUS LsLib_SemsDeSelect();
+
 inline int FSCANF_BYTE(FILE* stream, const char* format, void* pVal) {
   int Result = 0;
 
@@ -552,5 +591,8 @@ inline int FSCANF_BYTE(FILE* stream, const char* format, void* pVal) {
   }
   return Result;
 }
+std::string toString(const std::vector<uint8_t>& vec);
+#define ARR_AS_STRING(x) \
+  toString(std::vector<uint8_t>(x, x + sizeof(x) / sizeof(x[0])))
 
 #endif /*LSC_H*/

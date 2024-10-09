@@ -1,0 +1,7 @@
+on fs
+    start se_update_agent
+
+service se_update_agent /vendor/bin/hw/se_update_agent.nxp apply-update /vendor/etc/loaderservice
+    user vendor_nxp_se_update_agent
+    oneshot
+    disabled

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2018-2019, 2023 NXP
+ *  Copyright 2018-2019, 2023, 2025 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,16 +21,14 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <pthread.h>
-#if NXP_BOOTTIME_UPDATE
+#ifdef NXP_BOOTTIME_UPDATE
 #include <IChannel.h>
-#include <JcDnld.h>
 #endif
-#include <unistd.h>
-#include <sys/stat.h>
-#include <phNxpConfig.h>
-#include "phNxpConfig.h"
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
+#include <phNxpConfig.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define TERMINAL_LEN  5
 bool nfc_debug_enabled;

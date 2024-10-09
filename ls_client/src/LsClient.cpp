@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- *  Copyright 2018-2019 NXP
+ *  Copyright 2018-2019, 2025 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,24 +25,25 @@
 #include <string.h>
 #include <errno.h>
 
-/*static char gethex(const char *s, char **endptr);
-char *convert(const char *s, int *length);*/
+#undef LOG_TAG
+#define LOG_TAG "LsLib"
+
+#define GENERATED_HASH_SIZE 20
+
 uint8_t datahex(char c);
 void updateLsAid(uint8_t intfInfo);
-//extern pLsc_Dwnld_Context_t gpLsc_Dwnld_Context;
-//static android::sp<ISecureElementHalCallback> cCallback;
 /*******************************************************************************
 **
-** Function:        LSC_Start
+** Function:        LsClient_Start
 **
-** Description:     Starts the LSC update over DWP
+** Description:     Starts the Sems update
 **
 ** Returns:         SUCCESS if ok.
 **
 *******************************************************************************/
-tLSC_STATUS LSC_Start(const char* name, const char* dest, uint8_t* pdata,
-                      uint16_t len, uint8_t* respSW) {
-  static const char fn[] = "LSC_Start";
+tLSC_STATUS LsClient_Start(const char* name, const char* dest, uint8_t* pdata,
+                           uint16_t len, uint8_t* respSW) {
+  static const char fn[] = "LsClient_Start";
   tLSC_STATUS status = STATUS_FAILED;
   if (name != NULL) {
     ALOGE("%s: name is %s", fn, name);
@@ -55,6 +56,23 @@ tLSC_STATUS LSC_Start(const char* name, const char* dest, uint8_t* pdata,
   return status;
 }
 
+tLSC_STATUS LsClient_SemsSelect(IChannel_t* data) {
+  tLSC_STATUS status = STATUS_FAILED;
+  if (!initialize((IChannel_t*)data)) {
+    ALOGE("%s: initialize failed", __FUNCTION__);
+  } else {
+    status = LsLib_SelectSemsAID();
+  }
+  return status;
+}
+
+tLSC_STATUS LsClient_SemsSendGetDataCmd(uint8_t INS, uint8_t p2,
+                                        std::vector<uint8_t>& response) {
+  return LsLib_SendCmd(INS, p2, response);
+}
+
+tLSC_STATUS LsClient_SemsDeSelect() { return LsLib_SemsDeSelect(); }
+
 /*******************************************************************************
 **
 ** Function:        performLSDownload
@@ -64,25 +82,28 @@ tLSC_STATUS LSC_Start(const char* name, const char* dest, uint8_t* pdata,
 ** Returns:         SUCCESS of ok
 **
 *******************************************************************************/
-tLSC_STATUS performLSDownload(IChannel_t* data) {
+tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path) {
   tLSC_STATUS status = STATUS_FAILED;
-
+#ifdef NXP_BOOTTIME_UPDATE
   const char* lsUpdateBackupPath =
       "/vendor/etc/loaderservice_updater.txt";
   const char* lsUpdateBackupOutPath[2] =
   {"/data/vendor/nfc/loaderservice_updater_out.txt",
    "/data/vendor/secure_element/loaderservice_updater_out.txt",};
+#endif
   IChannel_t* mchannel = (IChannel_t*)data;
 
   /*generated SHA-1 string for secureElementLS
   This will remain constant as handled in secureElement HAL*/
-  char sha1[] = "6d583e84f2710e6b0f06beebc1a12a1083591373";
-  uint8_t hash[20] = {};
+  const char sha1[] = "6d583e84f2710e6b0f06beebc1a12a1083591373";
+  uint8_t hash[GENERATED_HASH_SIZE] = {};
 
-  for (int i = 0; i < 40; i = i + 2) {
+  for (int i = 0; i < (2 * GENERATED_HASH_SIZE); i = i + 2) {
     hash[i / 2] =
         (((datahex(sha1[i]) & 0x0F) << 4) | (datahex(sha1[i + 1]) & 0x0F));
   }
+
+#ifdef NXP_BOOTTIME_UPDATE
   /*Check and update if any new LS AID is available*/
   updateLsAid(mchannel->getInterfaceInfo());
 
@@ -109,8 +130,9 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
       fclose(fIn);
       fclose(fOut);
     }
-    status = LSC_Start(lsUpdateBackupPath, lsUpdateBackupOutPath[mchannel->getInterfaceInfo()],
-                       (uint8_t*)hash, (uint16_t)sizeof(hash), resSW);
+    status = LsClient_Start(lsUpdateBackupPath,
+                            lsUpdateBackupOutPath[mchannel->getInterfaceInfo()],
+                            (uint8_t*)hash, (uint16_t)sizeof(hash), resSW);
     resSW[0]=0x4e;
     ALOGD("%s LSC_Start completed\n", __func__);
     if (status == STATUS_SUCCESS) {
@@ -123,6 +145,25 @@ tLSC_STATUS performLSDownload(IChannel_t* data) {
       }
     }
   }
+#else
+
+  if (initialize((IChannel_t*)data)) {
+    uint8_t resSW[4] = {0x4e, 0x02, 0x69, 0x87};
+    FILE *fIn, *fOut;
+    if ((fIn = fopen(script_path, "rb")) == NULL) {
+      ALOGE("%s Cannot open file %s: error- %s\n", __func__, script_path,
+            strerror(errno));
+    } else {
+      status = LsClient_Start(script_path, NULL, (uint8_t*)hash,
+                              (uint16_t)sizeof(hash), resSW);
+      resSW[0] = 0x4e;
+      if (status == STATUS_SUCCESS) {
+        ALOGD("%s LsClient_Start completed\n", __func__);
+      }
+    }
+  }
+  finalize();
+#endif
   ALOGD("%s pthread_exit\n", __func__);
   return status;
 }
@@ -147,6 +188,7 @@ uint8_t datahex(char c) {
   return value;
 }
 
+#ifdef NXP_BOOTTIME_UPDATE
 /*******************************************************************************
 **
 ** Function:        updateLsAid
@@ -185,7 +227,7 @@ void updateLsAid(uint8_t intfInfo) {
   }
   fclose(fAID_MEM);
 }
-
+#endif
 void* phLS_memset(void* buff, int val, size_t len) {
   return memset(buff, val, len);
 }

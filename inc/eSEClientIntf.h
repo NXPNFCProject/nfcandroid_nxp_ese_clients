@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- *  Copyright 2018, 2023 NXP
+ *  Copyright 2018, 2023, 2025 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -51,11 +51,9 @@ typedef enum {
 typedef enum {
   ESE_UPDATE_COMPLETED = 0,
   ESE_UPDATE_STARTED,
-  ESE_JCOP_UPDATE_REQUIRED,
-  ESE_JCOP_UPDATE_COMPLETED,
   ESE_LS_UPDATE_REQUIRED,
   ESE_LS_UPDATE_COMPLETED
-}ese_update_state_t;
+} ese_update_state_t;
 
 extern bool nfc_debug_enabled;
 /*******************************************************************************

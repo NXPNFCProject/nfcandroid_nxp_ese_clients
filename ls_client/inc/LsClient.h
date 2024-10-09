@@ -1,6 +1,6 @@
 /*******************************************************************************
  *
- *  Copyright 2018 NXP
+ *  Copyright 2018, 2025 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
  *
  ******************************************************************************/
 
-#include "../../inc/IChannel.h"
+#include "IChannel.h"
 
 #ifdef __cplusplus
-
+#include <vector>
 extern "C" {
 
 #endif
@@ -35,26 +35,60 @@ typedef uint8_t tLSC_STATUS;
 
 /*******************************************************************************
 **
-** Function:        LSC_Start
+** Function:        LsClient_Start
 **
-** Description:     Starts the LSC over DWP
+** Description:     Starts the Sems Update
 **
 ** Returns:         SUCCESS if ok.
 **
 *******************************************************************************/
-unsigned char LSC_Start(const char* name, const char* dest, uint8_t* pdata,
-                        uint16_t len, uint8_t* respSW);
+unsigned char LsClient_Start(const char* name, const char* dest, uint8_t* pdata,
+                             uint16_t len, uint8_t* respSW);
 
 /*******************************************************************************
 **
 ** Function:        performLSDownload
 **
-** Description:     Perform LS during hal init
+** Description:     Performs SEMS script execution
 **
-** Returns:         SUCCESS of ok
+** Returns:         SUCCESS if ok
 **
 *******************************************************************************/
-tLSC_STATUS performLSDownload(IChannel_t* data);
+tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path);
+
+/*******************************************************************************
+**
+** Function:        LsClient_SemsSelect
+**
+** Description:     Selects SEMS AID
+**
+** Returns:         SUCCESS if ok
+**
+*******************************************************************************/
+tLSC_STATUS LsClient_SemsSelect(IChannel_t* data);
+
+/*******************************************************************************
+**
+** Function:        LsClient_SemsSendGetDataCmd
+**
+** Description:     Send plain cmd to Sems
+**
+** Returns:         Response from Sems for sent cmd
+**
+*******************************************************************************/
+tLSC_STATUS LsClient_SemsSendGetDataCmd(uint8_t INS, uint8_t p2,
+                                        std::vector<uint8_t>& response);
+
+/*******************************************************************************
+**
+** Function:        LsClient_SemsDeSelect
+**
+** Description:     De-selects SEMS AID
+**
+** Returns:         SUCCESS if ok
+**
+*******************************************************************************/
+tLSC_STATUS LsClient_SemsDeSelect();
 
 void* phLS_memset(void* buff, int val, size_t len);
 void* phLS_memcpy(void* dest, const void* src, size_t len);

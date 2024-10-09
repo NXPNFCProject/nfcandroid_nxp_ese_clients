@@ -1,5 +1,5 @@
 //
-// Copyright 2023 NXP
+// Copyright 2023, 2025 NXP
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,5 +42,33 @@ cc_library_shared {
         "libutils",
         "libdl",
         "libhidlbase",
+    ],
+}
+
+cc_library_shared {
+
+    name: "ls_client",
+    defaults: ["hidl_defaults"],
+    proprietary: true,
+
+    srcs: [
+        "ls_client/src/LsClient.cpp",
+        "ls_client/src/LsLib.cpp",
+    ],
+    local_include_dirs: [
+        "inc",
+        "utils",
+        "ls_client/inc",
+    ],
+    shared_libs: [
+        "libbase",
+        "libcutils",
+        "libdl",
+        "libhidlbase",
+        "liblog",
+        "libutils",
+        "libdl",
+        "libhidlbase",
+        "se_extn_client",
     ],
 }
