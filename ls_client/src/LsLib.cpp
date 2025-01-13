@@ -391,8 +391,8 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
   phNxpLs_data rspApdu;
   unsigned long semsPresent = 1;
 
-  if (Os_info == NULL || pTranscv_Info == NULL || status != STATUS_SUCCESS) {
-    ALOGE("%s: Invalid parameter. Status is %d", fn, status);
+  if (Os_info == NULL || pTranscv_Info == NULL) {
+    ALOGE("%s: Invalid parameter", fn);
   } else {
     phLS_memset(&cmdApdu, 0x00, sizeof(phNxpLs_data));
     phLS_memset(&rspApdu, 0x00, sizeof(phNxpLs_data));
