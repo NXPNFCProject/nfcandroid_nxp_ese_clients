@@ -136,19 +136,18 @@ std::string trim(const std::string& str) {
   return str.substr(first, last - first + 1);
 }
 
-int ParseSemsScriptsMetadata(std::string script_dir_path) {
-  std::string path = script_dir_path;
-  struct stat sb;
-  if (stat(path.c_str(), &sb) != 0 || !(sb.st_mode & S_IFDIR)) {
-    LOG(ERROR) << "dir " << path << " does not exist";
-    return -1;
-  }
+SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path) {
+  std::string path = std::move(script_dir_path);
+
   DIR* dir = opendir(path.c_str());
   if (dir == nullptr) {
     LOG(ERROR) << "Error opening directory: " << path;
-    return -1;
+    return SESTATUS_FILE_NOT_FOUND;
   }
   struct dirent* entry;
+  bool parse_success = true;
+  struct stat sb;
+
   while ((entry = readdir(dir)) != nullptr) {
     std::string name = entry->d_name;
     if (name == "." || name == "..") continue;
@@ -156,13 +155,17 @@ int ParseSemsScriptsMetadata(std::string script_dir_path) {
     if (stat(fullPath.c_str(), &sb) == 0 && !(sb.st_mode & S_IFDIR)) {
       if (ParseSemsMetadata(fullPath.c_str())) {
         LOG(ERROR) << "Error parsing: " << path;
-        return -1;
+        parse_success = false;
+        break;
       }
     }
   }
-  if (getstatus_script.script_path.empty()) {
-    LOG(ERROR) << "getstatus script is not found";
-    return -1;
+  if (dir != NULL) {
+    closedir(dir);
+  }
+  if (!parse_success || getstatus_script.script_path.empty()) {
+    LOG(ERROR) << "Failed to parse script or getstatus script is not found";
+    return SESTATUS_FILE_NOT_FOUND;
   }
   PrintAllParsedMetadata();
   for (int i = 0; i < getstatus_script.applet_aids_partial.size(); i++) {
@@ -190,7 +193,7 @@ int ParseSemsScriptsMetadata(std::string script_dir_path) {
       all_scripts_info.push_back(temp);
     }
   }
-  return 0;
+  return SESTATUS_OK;
 }
 
 // Print enumerated data for each SEMS script
@@ -607,7 +610,7 @@ int ParseSemsMetadata(const char* path) {
       if (!metadata[i].first.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
         std::string auth_frame_string = metadata[i].second;
         std::vector<uint8_t> auth_frame_sign;
-        ParseAuthFrameSignature(auth_frame_string, auth_frame_sign);
+        ParseAuthFrameSignature(std::move(auth_frame_string), auth_frame_sign);
         LOG(DEBUG) << "frame signature is:" << toString(auth_frame_sign);
         load_update_script_temp.signature = auth_frame_sign;
       }
@@ -636,7 +639,8 @@ int ParseSemsMetadata(const char* path) {
       if (!metadata[i].first.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
         std::string auth_frame_string = metadata[i].second;
         std::vector<uint8_t> auth_frame_signature;
-        ParseAuthFrameSignature(auth_frame_string, auth_frame_signature);
+        ParseAuthFrameSignature(std::move(auth_frame_string),
+                                auth_frame_signature);
         LOG(DEBUG) << "frame signature is:" << toString(auth_frame_signature);
         getstatus_script.signature = auth_frame_signature;
       }

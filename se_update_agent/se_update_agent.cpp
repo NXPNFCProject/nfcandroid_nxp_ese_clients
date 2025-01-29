@@ -21,7 +21,7 @@
 #include <android-base/properties.h>
 #include <log/log.h>
 #include <cstdlib>
-#include <cstring>
+#include <string>
 
 #undef LOG_TAG
 #define LOG_TAG "se_update_agent"
@@ -36,6 +36,7 @@ int main(int argc, char* argv[]) {
     LOG(ERROR) << "se_update_agent exiting";
     exit(-1);
   }
+
   std::string script_dir_path = argv[2];
 
   if (!strcmp(argv[1], "check-update")) {

@@ -18,6 +18,7 @@
 
 #ifndef __METADATA_PARSER__
 #define __METADATA_PARSER__
+#include <SEUpdaterClient.h>
 #include <iomanip>
 #include <string>
 #include <vector>
@@ -97,7 +98,7 @@ const std::vector<struct SemsScriptInfo> GetEnumeratedScriptsData();
  * Parses metadata field for all scripts available under
  * dir script_dir_path
  */
-int ParseSemsScriptsMetadata(std::string script_dir_path);
+SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path);
 
 /**
  * Parses response received during GETSTATUS script execution

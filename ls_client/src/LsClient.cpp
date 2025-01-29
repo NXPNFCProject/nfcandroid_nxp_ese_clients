@@ -149,11 +149,12 @@ tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path) {
 
   if (initialize((IChannel_t*)data)) {
     uint8_t resSW[4] = {0x4e, 0x02, 0x69, 0x87};
-    FILE *fIn, *fOut;
+    FILE* fIn;
     if ((fIn = fopen(script_path, "rb")) == NULL) {
       ALOGE("%s Cannot open file %s: error- %s\n", __func__, script_path,
             strerror(errno));
     } else {
+      fclose(fIn);
       status = LsClient_Start(script_path, NULL, (uint8_t*)hash,
                               (uint16_t)sizeof(hash), resSW);
       resSW[0] = 0x4e;

@@ -417,13 +417,16 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
         cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
         memcpy(&(cmdApdu.p_data[1]), SelectSEMS, sizeof(SelectSEMS));
       }
-    } else {
+    }
+#ifdef NXP_BOOTTIME_UPDATE
+    else {
       /*p_data will have channel_id (1 byte) + SelectLsc APDU*/
       cmdApdu.len = (int32_t)(sizeof(SelectLsc) + 1);
       cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
       cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
       memcpy(&(cmdApdu.p_data[1]), SelectLsc, sizeof(SelectLsc));
     }
+#endif
     ALOGD("%s: Calling Secure Element Transceive with Loader service AID", fn);
 
     transStat = LSC_Transceive(&cmdApdu, &rspApdu);
@@ -1159,13 +1162,13 @@ tLSC_STATUS LSC_CloseChannel(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     ALOGE("Invalid parameter");
   } else {
     for (cnt = 0; (cnt < Os_info->channel_cnt); cnt++) {
+      if (Os_info->Channel_Info[cnt].isOpend == false) continue;
+
       phLS_memset(&cmdApdu, 0x00, sizeof(phNxpLs_data));
       phLS_memset(&rspApdu, 0x00, sizeof(phNxpLs_data));
 
       cmdApdu.len = 5;
-      cmdApdu.p_data =
-          (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
-      if (Os_info->Channel_Info[cnt].isOpend == false) continue;
+      cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
       xx = 0;
       cmdApdu.p_data[xx++] = Os_info->Channel_Info[cnt].channel_id;
       cmdApdu.p_data[xx++] = 0x70;

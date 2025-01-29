@@ -241,8 +241,8 @@ static SESTATUS getLastScriptExecutionState(
 
 static SESTATUS ResumeInterruptedScript(const std::string& script_dir_path,
                                         ExecutionState exe_state) {
-  SESTATUS status = SESTATUS_FAILED;
-  if (ParseSemsScriptsMetadata(script_dir_path)) {
+  auto status = ParseSemsScriptsMetadata(script_dir_path);
+  if (status != SESTATUS_OK) {
     return status;
   }
   auto getstatus_script_metadata = GetStatusScriptData();
@@ -256,7 +256,7 @@ static SESTATUS ResumeInterruptedScript(const std::string& script_dir_path,
           toString(interrupted_sems_auth_frame_sign).c_str());
     auto all_scripts_info = GetEnumeratedScriptsData();
     std::string interrupted_script_path;
-    for (auto current_script : all_scripts_info) {
+    for (const auto& current_script : all_scripts_info) {
       // check only for LOAD scripts
       if (interrupted_sems_auth_frame_sign ==
           current_script.load_script.signature) {
@@ -312,7 +312,10 @@ SESTATUS CheckAppletUpdateRequired(bool* load_req, bool* update_req) {
 *******************************************************************************/
 void PrepareUpdate(const std::string& script_dir_path) {
   current_transport = TransportType::HAL_TO_OMAPI;
-  ResumeInterruptedScript(script_dir_path, ExecutionState::LOAD);
+  if (SESTATUS_FILE_NOT_FOUND ==
+      ResumeInterruptedScript(script_dir_path, ExecutionState::LOAD)) {
+    return;
+  }
 
   bool load_req = false, update_req = false;
   auto status = CheckAppletUpdateRequired(&load_req, &update_req);
@@ -345,7 +348,10 @@ void PrepareUpdate(const std::string& script_dir_path) {
 
 void PerformUpdate(const std::string& script_dir_path) {
   current_transport = TransportType::HAL_TO_HAL;
-  ResumeInterruptedScript(script_dir_path, ExecutionState::UPDATE);
+  if (SESTATUS_FILE_NOT_FOUND ==
+      ResumeInterruptedScript(script_dir_path, ExecutionState::UPDATE)) {
+    return;
+  }
 
   bool load_req = false, update_req = false;
   auto status = CheckAppletUpdateRequired(&load_req, &update_req);
@@ -366,7 +372,7 @@ void PerformEseUpdate(ExecutionState exe_state) {
   DisplayAllScriptsInfo();
   std::string current_script_path;
   ALOGI("exe_state is %d", exe_state);
-  for (auto current_script : all_scripts_info) {
+  for (const auto& current_script : all_scripts_info) {
     std::string script_path;
     switch (exe_state) {
       case ExecutionState::UPDATE:
