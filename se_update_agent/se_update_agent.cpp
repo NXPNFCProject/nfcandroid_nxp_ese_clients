@@ -46,6 +46,9 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "perform action apply-update";
     PerformUpdate(script_dir_path);
   } else if (!strcmp(argv[1], "log-status")) {
+  } else if (!strcmp(argv[1], "retry-check-update")) {
+    LOG(INFO) << "perform action retry-check-update";
+    RetryPrepareUpdate(script_dir_path);
   } else {
 #ifdef NXP_BOOTTIME_UPDATE
     LOG(INFO) << "perform Legacy Boottime update";

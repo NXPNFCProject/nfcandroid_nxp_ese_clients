@@ -40,13 +40,19 @@ typedef enum {
 /**
  * Checks and executes LOAD type Sems Script if required
  */
-void PrepareUpdate(const std::string& script_dir_path);
+SESTATUS PrepareUpdate(const std::string& script_dir_path,
+                       bool retry_load = false);
 
 /**
  * Checks and executes UPDATE type Sems Script if required
  * only during early boot
  */
 void PerformUpdate(const std::string& script_dir_path);
+
+/**
+ * Retries Prepare Update in case it was teared/failed
+ */
+void RetryPrepareUpdate(const std::string& script_dir_path);
 #ifdef NXP_BOOTTIME_UPDATE
 /**
  * Legacy method for checking if update is required

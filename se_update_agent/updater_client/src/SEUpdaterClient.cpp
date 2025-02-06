@@ -22,6 +22,7 @@
 
 #include <IChannel.h>
 #include <LsClient.h>
+#include <android-base/properties.h>
 #include <log/log.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -33,7 +34,15 @@
 #include <thread>
 #include <vector>
 
-static void PerformEseUpdate(ExecutionState exe_state);
+#define MAX_RETRY_LOAD 3
+static TransportType current_transport = TransportType::HAL_TO_OMAPI;
+IChannel_t Ch;
+ese_update_state_t ese_update = ESE_UPDATE_COMPLETED;
+constexpr char kEseLoadPendingProp[] = "vendor.se_update_agent.load_pending";
+constexpr char kEseLoadRetryCountProp[] =
+    "persist.vendor.se_update_agent.load_retry_cnt";
+
+static SESTATUS PerformEseUpdate(ExecutionState exe_state);
 static SESTATUS ExecuteSemsScript(const char* script_path,
                                   ExecutionState exec_state);
 void seteSEClientState(uint8_t state);
@@ -46,9 +55,6 @@ SESTATUS ESE_ChannelInit(IChannel* ch);
 uint8_t performLSUpdate(const char* path);
 SESTATUS eSEUpdate_SeqHandler(const char* path);
 
-static TransportType current_transport = TransportType::HAL_TO_OMAPI;
-IChannel_t Ch;
-ese_update_state_t ese_update = ESE_UPDATE_COMPLETED;
 void SE_Reset() { /* phNxpEse_coldReset(); */ }
 
 int16_t SE_Open() {
@@ -310,24 +316,32 @@ SESTATUS CheckAppletUpdateRequired(bool* load_req, bool* update_req) {
 ** Returns:         void
 **
 *******************************************************************************/
-void PrepareUpdate(const std::string& script_dir_path) {
+SESTATUS PrepareUpdate(const std::string& script_dir_path, bool retry_load) {
   current_transport = TransportType::HAL_TO_OMAPI;
+  SESTATUS load_exec_status = SESTATUS_OK;
   if (SESTATUS_FILE_NOT_FOUND ==
       ResumeInterruptedScript(script_dir_path, ExecutionState::LOAD)) {
-    return;
+    return load_exec_status;
   }
 
   bool load_req = false, update_req = false;
   auto status = CheckAppletUpdateRequired(&load_req, &update_req);
   if (status != SESTATUS_OK) {
     ALOGE("Failed to check if update is required");
-    return;
+    return load_exec_status;
+  }
+  if (!retry_load) {
+    // LOAD triggered by OTA Agent
+    // Reset retry counter to 0 so that if LOAD fails/tears here, it can be
+    // retried at next boot by se_update_agent itself
+    android::base::SetProperty(kEseLoadRetryCountProp, std::to_string(0));
   }
   if (load_req) {
-    PerformEseUpdate(ExecutionState::LOAD);
+    load_exec_status = PerformEseUpdate(ExecutionState::LOAD);
   } else {
     ALOGI("ELF LOAD is not required");
   }
+  return load_exec_status;
 }
 /***************************************************************************
 **  function: PerformUpdate
@@ -365,12 +379,39 @@ void PerformUpdate(const std::string& script_dir_path) {
     ALOGI("ESE componenets are up-to-date");
   }
 }
+
+void RetryPrepareUpdate(const std::string& script_dir_path) {
+  std::string prop_value =
+      android::base::GetProperty(kEseLoadPendingProp, /* default */ "0");
+  if (prop_value.compare("1") == 0) {
+    ALOGI("ELF load is pending");
+    if (!android::base::SetProperty(kEseLoadPendingProp, "0")) {
+      ALOGE("Failed to reset the property..exiting");
+      return;
+    }
+  }
+  auto retry_cnt =
+      android::base::GetUintProperty<uint8_t>(kEseLoadRetryCountProp, 0);
+  ALOGI("LOAD retry count: %d", retry_cnt);
+  if (retry_cnt++ > MAX_RETRY_LOAD) {
+    ALOGE("MAX Retry count reached for force LOAD.. exiting");
+  } else {
+    if (PrepareUpdate(script_dir_path, true) == SESTATUS_OK) {
+      // reset retry counter
+      retry_cnt = 0;
+    }
+    android::base::SetProperty(kEseLoadRetryCountProp,
+                               std::to_string(retry_cnt));
+  }
+}
 // Iterate over all parsed scripts and execute based on current execution state
-void PerformEseUpdate(ExecutionState exe_state) {
+SESTATUS PerformEseUpdate(ExecutionState exe_state) {
+  SESTATUS status = SESTATUS_OK;
   auto all_scripts_info = GetEnumeratedScriptsData();
   ALOGD("Display all scripts info after check update_required");
   DisplayAllScriptsInfo();
   std::string current_script_path;
+  bool preload_pending = false;
   ALOGI("exe_state is %d", exe_state);
   for (const auto& current_script : all_scripts_info) {
     std::string script_path;
@@ -381,6 +422,7 @@ void PerformEseUpdate(ExecutionState exe_state) {
           if (current_script.pre_load_required) {
             ALOGE("pre_load is not completed for %s.. aborting",
                   current_script.update_script.script_path.c_str());
+            preload_pending = true;
           } else {
             script_path = current_script.update_script.script_path;
           }
@@ -401,14 +443,21 @@ void PerformEseUpdate(ExecutionState exe_state) {
 
     if (!script_path.empty()) {
       ALOGI("Start SEMS execution for script: %s", script_path.c_str());
-      auto status = ExecuteSemsScript(script_path.c_str(), exe_state);
-      if (status != SESTATUS_OK) {
+      auto exec_status = ExecuteSemsScript(script_path.c_str(), exe_state);
+      if (exec_status != SESTATUS_OK) {
+        status = exec_status;
         ALOGE("Failed: SEMS execution for script: %s", script_path.c_str());
       } else {
         ALOGI("Execution completed successfully: %s", script_path.c_str());
       }
     }
   }
+  if (preload_pending) {
+    if (!android::base::SetProperty(kEseLoadPendingProp, "1")) {
+      ALOGE("Failed to set the property");
+    }
+  }
+  return status;
 }
 
 SESTATUS ESE_ChannelInit(IChannel* ch) {

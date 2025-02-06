@@ -5,3 +5,11 @@ service se_update_agent /vendor/bin/hw/se_update_agent.nxp apply-update /vendor/
     user vendor_nxp_se_update_agent
     oneshot
     disabled
+
+on propertry:sys.boot_completed=1 && property:vendor.se_update_agent.load_pending=1
+   start retry_se_update_agent
+
+service retry_se_update_agent /vendor/bin/hw/se_update_agent.nxp retry-check-update /vendor/etc/loaderservice
+    user vendor_nxp_se_update_agent
+    oneshot
+    disabled
