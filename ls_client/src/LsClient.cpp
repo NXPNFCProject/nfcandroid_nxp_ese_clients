@@ -41,14 +41,15 @@ void updateLsAid(uint8_t intfInfo);
 ** Returns:         SUCCESS if ok.
 **
 *******************************************************************************/
-tLSC_STATUS LsClient_Start(const char* name, const char* dest, uint8_t* pdata,
+tLSC_STATUS LsClient_Start(const char* name, const char* dest,
+                           std::streampos start_offset, uint8_t* pdata,
                            uint16_t len, uint8_t* respSW) {
   static const char fn[] = "LsClient_Start";
   tLSC_STATUS status = STATUS_FAILED;
   if (name != NULL) {
     ALOGE("%s: name is %s", fn, name);
     ALOGE("%s: Dest is %s", fn, dest);
-    status = Perform_LSC(name, dest, pdata, len, respSW);
+    status = Perform_LSC(name, dest, start_offset, pdata, len, respSW);
   } else {
     ALOGE("Invalid parameter");
   }
@@ -82,7 +83,8 @@ tLSC_STATUS LsClient_SemsDeSelect() { return LsLib_SemsDeSelect(); }
 ** Returns:         SUCCESS of ok
 **
 *******************************************************************************/
-tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path) {
+tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path,
+                              std::streampos start_offset) {
   tLSC_STATUS status = STATUS_FAILED;
 #ifdef NXP_BOOTTIME_UPDATE
   const char* lsUpdateBackupPath =
@@ -132,7 +134,7 @@ tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path) {
     }
     status = LsClient_Start(lsUpdateBackupPath,
                             lsUpdateBackupOutPath[mchannel->getInterfaceInfo()],
-                            (uint8_t*)hash, (uint16_t)sizeof(hash), resSW);
+                            0, (uint8_t*)hash, (uint16_t)sizeof(hash), resSW);
     resSW[0]=0x4e;
     ALOGD("%s LSC_Start completed\n", __func__);
     if (status == STATUS_SUCCESS) {
@@ -155,7 +157,7 @@ tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path) {
             strerror(errno));
     } else {
       fclose(fIn);
-      status = LsClient_Start(script_path, NULL, (uint8_t*)hash,
+      status = LsClient_Start(script_path, NULL, start_offset, (uint8_t*)hash,
                               (uint16_t)sizeof(hash), resSW);
       resSW[0] = 0x4e;
       if (status == STATUS_SUCCESS) {

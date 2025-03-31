@@ -35,6 +35,7 @@
 #include <vector>
 
 #define MAX_RETRY_LOAD 3
+constexpr char SEMS_SELF_UPDATE_DIR_NAME[] = "sems_self_update";
 static TransportType current_transport = TransportType::HAL_TO_OMAPI;
 IChannel_t Ch;
 ese_update_state_t ese_update = ESE_UPDATE_COMPLETED;
@@ -42,18 +43,23 @@ constexpr char kEseLoadPendingProp[] = "vendor.se_update_agent.load_pending";
 constexpr char kEseLoadRetryCountProp[] =
     "persist.vendor.se_update_agent.load_retry_cnt";
 
-static SESTATUS PerformEseUpdate(ExecutionState exe_state);
+void CheckAndApplyUpdate(const std::string& script_dir_path);
+static SESTATUS ApplyUpdate(ExecutionState exe_state);
 static SESTATUS ExecuteSemsScript(const char* script_path,
+                                  std::streampos start_offset,
                                   ExecutionState exec_state);
 void seteSEClientState(uint8_t state);
+static SESTATUS GetInterruptedScriptPath(std::string& interrupted_script_path,
+                                         std::streampos& start_offset,
+                                         ExecutionState exe_state);
 #ifdef NXP_BOOTTIME_UPDATE
 void* eSEClientUpdate_ThreadHandler(void* data);
 void* eSEUpdate_SE_SeqHandler(void* data);
 void eSEClientUpdate_Thread(const char* path);
 #endif  // NXP_BOOTTIME_UPDATE
 SESTATUS ESE_ChannelInit(IChannel* ch);
-uint8_t performLSUpdate(const char* path);
-SESTATUS eSEUpdate_SeqHandler(const char* path);
+uint8_t performLSUpdate(const char* path, std::streampos start_offset);
+SESTATUS eSEUpdate_SeqHandler(const char* path, std::streampos start_offset);
 
 void SE_Reset() { /* phNxpEse_coldReset(); */ }
 
@@ -184,16 +190,21 @@ SESTATUS perform_eSEClientUpdate() {
 #endif  // NXP_BOOTTIME_UPDATE
 
 static SESTATUS ExecuteSemsScript(const char* script_path,
+                                  std::streampos start_offset,
                                   ExecutionState exec_state) {
   seteSEClientState(ESE_LS_UPDATE_REQUIRED);
   SetScriptExecutionState(exec_state);
-  auto status = eSEUpdate_SeqHandler(script_path);
+  auto status = eSEUpdate_SeqHandler(script_path, start_offset);
   if (status != SESTATUS_OK) {
     ALOGE("Failed: SEMS execution for: %s, Retrying", script_path);
     // re-try one time
     seteSEClientState(ESE_LS_UPDATE_REQUIRED);
     SetScriptExecutionState(exec_state);
-    status = eSEUpdate_SeqHandler(script_path);
+    std::string interrupted_script_path;
+    std::streampos start_offset = 0;  // default start from beginning
+    // find the start_offset
+    GetInterruptedScriptPath(interrupted_script_path, start_offset, exec_state);
+    status = eSEUpdate_SeqHandler(script_path, start_offset);
   }
   return status;
 }
@@ -243,29 +254,39 @@ static SESTATUS getLastScriptExecutionState(
   return static_cast<SESTATUS>(status);
 }
 
-// check and resume interrupted script execution
-
-static SESTATUS ResumeInterruptedScript(const std::string& script_dir_path,
-                                        ExecutionState exe_state) {
-  auto status = ParseSemsScriptsMetadata(script_dir_path);
-  if (status != SESTATUS_OK) {
-    return status;
+static bool HasMatchingSignature(
+    const std::vector<uint8_t>& interrupted_auth_frame,
+    const std::vector<std::pair<std::vector<uint8_t>, std::streampos>>&
+        auth_frames_in_script,
+    std::streampos* script_start_offset) {
+  for (int auth_frame_cnt = 0; auth_frames_in_script.size(); auth_frame_cnt++) {
+    if (interrupted_auth_frame == auth_frames_in_script[auth_frame_cnt].first) {
+      *script_start_offset = auth_frames_in_script[auth_frame_cnt].second;
+      ALOGD("Interrupted Script auth frame found at count: %d with offset %lld",
+            auth_frame_cnt, static_cast<long long>(*script_start_offset));
+      return true;
+    }
   }
-  auto getstatus_script_metadata = GetStatusScriptData();
+  return false;
+}
 
+static SESTATUS GetInterruptedScriptPath(std::string& interrupted_script_path,
+                                         std::streampos& start_offset,
+                                         ExecutionState exe_state) {
   bool sems_interrupted = false;
   std::vector<uint8_t> interrupted_sems_auth_frame_sign;
-  status = getLastScriptExecutionState(&sems_interrupted,
-                                       interrupted_sems_auth_frame_sign);
+  auto status = getLastScriptExecutionState(&sems_interrupted,
+                                            interrupted_sems_auth_frame_sign);
   if (sems_interrupted) {
-    ALOGD("sems execution was interrupted for script with signature: %s",
+    ALOGD("Execution was interrupted for script with signature: %s",
           toString(interrupted_sems_auth_frame_sign).c_str());
     auto all_scripts_info = GetEnumeratedScriptsData();
-    std::string interrupted_script_path;
+
     for (const auto& current_script : all_scripts_info) {
       // check only for LOAD scripts
-      if (interrupted_sems_auth_frame_sign ==
-          current_script.load_script.signature) {
+      if (HasMatchingSignature(interrupted_sems_auth_frame_sign,
+                               current_script.load_script.signatures,
+                               &start_offset)) {
         if (exe_state == ExecutionState::LOAD) {
           interrupted_script_path = current_script.load_script.script_path;
         } else {
@@ -274,8 +295,9 @@ static SESTATUS ResumeInterruptedScript(const std::string& script_dir_path,
         }
         break;
       }
-      if (interrupted_sems_auth_frame_sign ==
-          current_script.update_script.signature) {
+      if (HasMatchingSignature(interrupted_sems_auth_frame_sign,
+                               current_script.update_script.signatures,
+                               &start_offset)) {
         if (exe_state == ExecutionState::UPDATE) {
           interrupted_script_path = current_script.update_script.script_path;
         } else {
@@ -285,13 +307,30 @@ static SESTATUS ResumeInterruptedScript(const std::string& script_dir_path,
         break;
       }
     }
-    if (!interrupted_script_path.empty()) {
-      ALOGD("Resuming execution of interrupted script: %s",
-            interrupted_script_path.c_str());
-      status = ExecuteSemsScript(interrupted_script_path.c_str(), exe_state);
-      if (status != SESTATUS_OK) {
-        ALOGE("Failed to resume execution of interrupted script");
-      }
+  }
+  return status;
+}
+
+// check and resume interrupted script execution
+
+static SESTATUS ResumeInterruptedScript(const std::string& script_dir_path,
+                                        ExecutionState exe_state) {
+  auto status = ParseSemsScriptsMetadata(script_dir_path);
+  if (status != SESTATUS_OK) {
+    return status;
+  }
+  auto getstatus_script_metadata = GetStatusScriptData();
+  std::string interrupted_script_path;
+  std::streampos start_offset = 0;  // default start from beginning
+  GetInterruptedScriptPath(interrupted_script_path, start_offset, exe_state);
+  if (!interrupted_script_path.empty()) {
+    ALOGD("Resuming execution of interrupted script: %s at offset: %lld",
+          interrupted_script_path.c_str(),
+          static_cast<long long>(start_offset));
+    status = ExecuteSemsScript(interrupted_script_path.c_str(), start_offset,
+                               exe_state);
+    if (status != SESTATUS_OK) {
+      ALOGE("Failed to resume execution of interrupted script");
     }
   }
   return status;
@@ -302,7 +341,7 @@ SESTATUS CheckAppletUpdateRequired(bool* load_req, bool* update_req) {
   // compare currently installed versions with versions from SEMS scripts
   auto getstatus_script_metadata = GetStatusScriptData();
   auto status = ExecuteSemsScript(getstatus_script_metadata.script_path.c_str(),
-                                  ExecutionState::GET_STATUS);
+                                  0, ExecutionState::GET_STATUS);
   if (status == SESTATUS_OK) CheckLoad_Or_UpdateRequired(load_req, update_req);
   return status;
 }
@@ -318,17 +357,17 @@ SESTATUS CheckAppletUpdateRequired(bool* load_req, bool* update_req) {
 *******************************************************************************/
 SESTATUS PrepareUpdate(const std::string& script_dir_path, bool retry_load) {
   current_transport = TransportType::HAL_TO_OMAPI;
-  SESTATUS load_exec_status = SESTATUS_OK;
+
   if (SESTATUS_FILE_NOT_FOUND ==
       ResumeInterruptedScript(script_dir_path, ExecutionState::LOAD)) {
-    return load_exec_status;
+    return SESTATUS_OK;
   }
 
   bool load_req = false, update_req = false;
   auto status = CheckAppletUpdateRequired(&load_req, &update_req);
   if (status != SESTATUS_OK) {
     ALOGE("Failed to check if update is required");
-    return load_exec_status;
+    return status;
   }
   if (!retry_load) {
     // LOAD triggered by OTA Agent
@@ -337,11 +376,11 @@ SESTATUS PrepareUpdate(const std::string& script_dir_path, bool retry_load) {
     android::base::SetProperty(kEseLoadRetryCountProp, std::to_string(0));
   }
   if (load_req) {
-    load_exec_status = PerformEseUpdate(ExecutionState::LOAD);
+    status = ApplyUpdate(ExecutionState::LOAD);
   } else {
     ALOGI("ELF LOAD is not required");
   }
-  return load_exec_status;
+  return status;
 }
 /***************************************************************************
 **  function: PerformUpdate
@@ -361,22 +400,47 @@ SESTATUS PrepareUpdate(const std::string& script_dir_path, bool retry_load) {
 *******************************************************************************/
 
 void PerformUpdate(const std::string& script_dir_path) {
+  // check and resume if SEMS Self update was teared
+  std::string sems_self_update_dir_path =
+      script_dir_path + "/" + SEMS_SELF_UPDATE_DIR_NAME;
+
   current_transport = TransportType::HAL_TO_HAL;
-  if (SESTATUS_FILE_NOT_FOUND ==
-      ResumeInterruptedScript(script_dir_path, ExecutionState::UPDATE)) {
-    return;
+  auto status_sems = ResumeInterruptedScript(sems_self_update_dir_path,
+                                             ExecutionState::UPDATE);
+
+  // check and resume if Other Applet(s) update was teared
+  auto status_other =
+      ResumeInterruptedScript(script_dir_path, ExecutionState::UPDATE);
+
+  if (status_sems != SESTATUS_FILE_NOT_FOUND) {
+    ALOGI("Check and apply updates for Sems Self Update");
+    CheckAndApplyUpdate(sems_self_update_dir_path);
   }
 
+  if (status_other != SESTATUS_FILE_NOT_FOUND) {
+    ALOGI("Check and apply updates for other Applets");
+    CheckAndApplyUpdate(script_dir_path);
+  }
+}
+
+void CheckAndApplyUpdate(const std::string& script_dir_path) {
+
+  current_transport = TransportType::HAL_TO_HAL;
+  auto status = ParseSemsScriptsMetadata(script_dir_path);
+  if (status != SESTATUS_OK) {
+    return;
+  }
   bool load_req = false, update_req = false;
-  auto status = CheckAppletUpdateRequired(&load_req, &update_req);
+  status = CheckAppletUpdateRequired(&load_req, &update_req);
   if (status != SESTATUS_OK) {
     ALOGE("Failed to check if update is required");
     return;
   }
   if (update_req) {
-    PerformEseUpdate(ExecutionState::UPDATE);
+    ApplyUpdate(ExecutionState::UPDATE);
   } else {
-    ALOGI("ESE componenets are up-to-date");
+    ALOGI("ESE componenet(s) are up-to-date with scripts under %s",
+          script_dir_path.c_str());
   }
 }
 
@@ -405,11 +469,13 @@ void RetryPrepareUpdate(const std::string& script_dir_path) {
   }
 }
 // Iterate over all parsed scripts and execute based on current execution state
-SESTATUS PerformEseUpdate(ExecutionState exe_state) {
+SESTATUS ApplyUpdate(ExecutionState exe_state) {
   SESTATUS status = SESTATUS_OK;
   auto all_scripts_info = GetEnumeratedScriptsData();
+
   ALOGD("Display all scripts info after check update_required");
   DisplayAllScriptsInfo();
+
   std::string current_script_path;
   bool preload_pending = false;
   ALOGI("exe_state is %d", exe_state);
@@ -443,7 +509,8 @@ SESTATUS PerformEseUpdate(ExecutionState exe_state) {
 
     if (!script_path.empty()) {
       ALOGI("Start SEMS execution for script: %s", script_path.c_str());
-      auto exec_status = ExecuteSemsScript(script_path.c_str(), exe_state);
+      auto exec_status =
+          ExecuteSemsScript(script_path.c_str(), 0 /*from start*/, exe_state);
       if (exec_status != SESTATUS_OK) {
         status = exec_status;
         ALOGE("Failed: SEMS execution for script: %s", script_path.c_str());
@@ -524,10 +591,10 @@ void* eSEClientUpdate_ThreadHandler(void* data) {
 ** Returns:         Sems execution status
 **
 *******************************************************************************/
-uint8_t performLSUpdate(const char* path) {
+uint8_t performLSUpdate(const char* path, std::streampos start_offset) {
   uint8_t status = ESE_ChannelInit(&Ch);
   if (status == SESTATUS_OK) {
-    status = performLSDownload(&Ch, path);
+    status = performLSDownload(&Ch, path, start_offset);
   }
   return status;
 }
@@ -553,13 +620,13 @@ void seteSEClientState(uint8_t state) {
 ** Returns:         SUCCESS of ok
 **
 *******************************************************************************/
-SESTATUS eSEUpdate_SeqHandler(const char* path) {
+SESTATUS eSEUpdate_SeqHandler(const char* path, std::streampos start_offset) {
   SESTATUS status = SESTATUS_FAILED;
   switch (ese_update) {
     case ESE_UPDATE_STARTED:
       [[fallthrough]];
     case ESE_LS_UPDATE_REQUIRED:
-      status = (SESTATUS)performLSUpdate(path);
+      status = (SESTATUS)performLSUpdate(path, start_offset);
       if (status != SESTATUS_OK) {
         ALOGE("%s: LS_UPDATE_FAILED", __FUNCTION__);
       }

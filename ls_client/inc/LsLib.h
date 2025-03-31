@@ -53,6 +53,7 @@ typedef struct Lsc_ImageInfo {
   int fls_RespSize;
   char fls_RespPath[384];
   int bytes_wrote;
+  long long fls_start_offset;
   Lsc_ChannelInfo_t Channel_Info[10];
   uint8_t channel_cnt;
   bool isUpdaterMode;
@@ -218,7 +219,8 @@ void finalize();
 **
 *******************************************************************************/
 tLSC_STATUS Perform_LSC(const char* path, const char* dest,
-                        const uint8_t* pdata, uint16_t len, uint8_t* respSW);
+                        std::streampos start_offset, const uint8_t* pdata,
+                        uint16_t len, uint8_t* respSW);
 
 /*******************************************************************************
 **
@@ -288,7 +290,8 @@ static tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
 static tLSC_STATUS LSC_update_seq_handler(
     tLSC_STATUS (*seq_handler[])(Lsc_ImageInfo_t* pContext, tLSC_STATUS status,
                                  Lsc_TranscieveInfo_t* pInfo),
-    const char* name, const char* dest) __attribute__((unused));
+    std::streampos start_offset, const char* name, const char* dest)
+    __attribute__((unused));
 
 /*******************************************************************************
 **

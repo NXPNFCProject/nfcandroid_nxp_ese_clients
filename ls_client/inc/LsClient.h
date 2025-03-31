@@ -54,7 +54,8 @@ unsigned char LsClient_Start(const char* name, const char* dest, uint8_t* pdata,
 ** Returns:         SUCCESS if ok
 **
 *******************************************************************************/
-tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path);
+tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path,
+                              std::streampos start_offset);
 
 /*******************************************************************************
 **

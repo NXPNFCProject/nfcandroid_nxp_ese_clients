@@ -52,7 +52,13 @@ const std::vector<struct SemsScriptInfo> GetEnumeratedScriptsData() {
 const struct GetStatusScriptMetaInfo GetStatusScriptData() {
   return getstatus_script;
 }
-
+void ResetGlobalMetadataState() {
+  load_update_script.clear();
+  all_scripts_info.clear();
+  getstatus_response.clear();
+  memset(&getstatus_script, 0, sizeof(GetStatusScriptMetaInfo));
+  exe_state = ExecutionState::GET_STATUS;
+}
 static uint8_t Numof_lengthbytes(uint8_t* read_buf, int32_t* pLen) {
   static const char fn[] = "Numof_lengthbytes";
   uint8_t len_byte = 0, i = 0;
@@ -144,6 +150,9 @@ SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path) {
     LOG(ERROR) << "Error opening directory: " << path;
     return SESTATUS_FILE_NOT_FOUND;
   }
+
+  ResetGlobalMetadataState();
+
   struct dirent* entry;
   bool parse_success = true;
   struct stat sb;
@@ -503,11 +512,28 @@ int ParseSemsMetadata(const char* path) {
     return 1;
   }
   LOG(DEBUG) << "ParseSemsMetadata: " << path;
-  std::vector<std::pair<std::string, std::string>> metadata;
+  std::vector<std::pair<std::string, std::pair<std::string, std::streampos>>>
+      metadata;
   std::string line;
+  uint8_t auth_frame_number = 0;
 
-  // Read the file line by line
-  while (std::getline(file, line)) {
+  // A SEMS script starts with Certificate Frame(7F21) and uniquley idenitified
+  // using AUTH Frame(60) In case there are multiple scripts embedded within one
+  // file, record AUTH frame and corresponding offset of 7F21 to identify which
+  // script to run in case of tear
+  std::streampos line_start_offset = 0, script_start_offset = 0;
+
+  while (file) {
+    line_start_offset = file.tellg();
+    if (line_start_offset == -1) {
+      LOG(ERROR) << "Failed to read current position in file. errno: " << errno;
+      return 1;
+    }
+    // Read the file line by line
+    if (!std::getline(file, line)) {
+      LOG(INFO) << "File read completed";
+      break;
+    }
     if (line.rfind("%%%", 0) == 0) {  // Check if line starts with %%%
       std::istringstream iss(line);
       std::string delim, key, value;
@@ -517,19 +543,17 @@ int ParseSemsMetadata(const char* path) {
       key = trim(key);
       value = trim(value);
 
-      metadata.push_back(std::make_pair(key, value));
+      metadata.push_back(
+          std::make_pair(key, std::make_pair(value, std::streampos(-1))));
     } else if (line.rfind("7f21", 0) == 0) {
-      LOG(DEBUG) << "Ignore 7F21";
+      LOG(DEBUG) << "7F21 found, record script offset";
+      script_start_offset = line_start_offset;
     } else if (line.rfind("60", 0) == 0) {
       LOG(DEBUG) << "Found auth frame";
-      std::string key = "AUTH_FRAME";
+      std::string key = "AUTH_FRAME" + std::to_string(auth_frame_number);
       trim(line);
-      metadata.push_back(std::make_pair(key, line));
-      break;
-    } else {
-      LOG(DEBUG) << line;
-      LOG(DEBUG) << "All Required data has been read:\n";
-      break;
+      metadata.push_back(
+          std::make_pair(key, std::make_pair(line, script_start_offset)));
     }
   }
 
@@ -543,7 +567,7 @@ int ParseSemsMetadata(const char* path) {
   SemsScriptType script_type = UPDATE_SCRIPT;
   if (!strncmp(metadata[0].first.c_str(), "SEMSType", strlen("SEMSType"))) {
     uint8_t current_byte;
-    SSCANF_BYTE(metadata[0].second.c_str(), "%2X", &current_byte);
+    SSCANF_BYTE(metadata[0].second.first.c_str(), "%2X", &current_byte);
     script_type = (SemsScriptType)current_byte;
   }
 
@@ -558,8 +582,8 @@ int ParseSemsMetadata(const char* path) {
       if (!metadata[i].first.compare(0, strlen("AppletAID"), "AppletAID")) {
         uint8_t read_buf = 0x00;
         std::vector<uint8_t> partial_aid;
-        for (int x = 0; x < metadata[i].second.size();) {
-          SSCANF_BYTE(metadata[i].second.c_str() + x, "%2X", &read_buf);
+        for (int x = 0; x < metadata[i].second.first.size();) {
+          SSCANF_BYTE(metadata[i].second.first.c_str() + x, "%2X", &read_buf);
           partial_aid.push_back(read_buf);
           x = x + 2;
         }
@@ -571,8 +595,8 @@ int ParseSemsMetadata(const char* path) {
       if (!metadata[i].first.compare(0, strlen("ELFAID"), "ELFAID")) {
         uint8_t read_buf = 0x00;
         std::vector<uint8_t> elf_aid;
-        for (int x = 0; x < metadata[i].second.size();) {
-          SSCANF_BYTE(metadata[i].second.c_str() + x, "%2X", &read_buf);
+        for (int x = 0; x < metadata[i].second.first.size();) {
+          SSCANF_BYTE(metadata[i].second.first.c_str() + x, "%2X", &read_buf);
           elf_aid.push_back(read_buf);
           x = x + 2;
         }
@@ -583,8 +607,8 @@ int ParseSemsMetadata(const char* path) {
       }
       if (!metadata[i].first.compare(0, strlen("ELFVersion"), "ELFVersion")) {
         uint8_t read_buf = 0x00;
-        for (int x = 0; x < metadata[i].second.size();) {
-          SSCANF_BYTE(metadata[i].second.c_str() + x, "%2X", &read_buf);
+        for (int x = 0; x < metadata[i].second.first.size();) {
+          SSCANF_BYTE(metadata[i].second.first.c_str() + x, "%2X", &read_buf);
           load_update_script_temp.elf_version.push_back(read_buf);
           x = x + 2;
         }
@@ -594,7 +618,7 @@ int ParseSemsMetadata(const char* path) {
       }
       if (!metadata[i].first.compare(0, strlen("PlatformID"), "PlatformID")) {
         uint8_t read_buf = 0x00;
-        SSCANF_BYTE(metadata[i].second.c_str(), "%2X", &read_buf);
+        SSCANF_BYTE(metadata[i].second.first.c_str(), "%2X", &read_buf);
         load_update_script_temp.platform_id = read_buf;
         if (IsDuplicateEntry(load_update_script_metafields, "PlatformID")) {
           return 1;
@@ -608,11 +632,13 @@ int ParseSemsMetadata(const char* path) {
         }
       }
       if (!metadata[i].first.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
-        std::string auth_frame_string = metadata[i].second;
+        std::string auth_frame_string = metadata[i].second.first;
+        std::streampos script_offset = metadata[i].second.second;
         std::vector<uint8_t> auth_frame_sign;
         ParseAuthFrameSignature(std::move(auth_frame_string), auth_frame_sign);
         LOG(DEBUG) << "frame signature is:" << toString(auth_frame_sign);
-        load_update_script_temp.signature = auth_frame_sign;
+        load_update_script_temp.signatures.push_back(
+            std::make_pair(auth_frame_sign, script_offset));
       }
     }
     if (script_type == SemsScriptType::GET_STATUS_SCRIPT) {
@@ -626,8 +652,8 @@ int ParseSemsMetadata(const char* path) {
       if (!metadata[i].first.compare(0, strlen("AppletAID"), "AppletAID")) {
         uint8_t read_buf = 0x00;
         std::vector<uint8_t> partial_aid;
-        for (int x = 0; x < metadata[i].second.size();) {
-          SSCANF_BYTE(metadata[i].second.c_str() + x, "%2X", &read_buf);
+        for (int x = 0; x < metadata[i].second.first.size();) {
+          SSCANF_BYTE(metadata[i].second.first.c_str() + x, "%2X", &read_buf);
           partial_aid.push_back(read_buf);
           x = x + 2;
         }
@@ -637,7 +663,7 @@ int ParseSemsMetadata(const char* path) {
         }
       }
       if (!metadata[i].first.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
-        std::string auth_frame_string = metadata[i].second;
+        std::string auth_frame_string = metadata[i].second.first;
         std::vector<uint8_t> auth_frame_signature;
         ParseAuthFrameSignature(std::move(auth_frame_string),
                                 auth_frame_signature);
@@ -684,7 +710,13 @@ void PrintAllParsedMetadata() {
     LOG(INFO) << "elf_aid_complete:"
               << toString(load_update_script[i].elf_aid_complete);
     LOG(INFO) << "elf_version:" << toString(load_update_script[i].elf_version);
-    LOG(INFO) << "signature:" << toString(load_update_script[i].signature);
+    for (int count = 0; count < load_update_script[i].signatures.size();
+         count++) {
+      LOG(INFO) << "signature_" << count << ": "
+                << toString(load_update_script[i].signatures[count].first);
+      LOG(INFO) << "offset_" << count << ": "
+                << load_update_script[i].signatures[count].second;
+    }
     LOG(INFO) << "PlatformID: " << std::hex << std::setw(2) << std::setfill('0')
               << (load_update_script[i].platform_id & 0xFF);
     LOG(INFO) << "";

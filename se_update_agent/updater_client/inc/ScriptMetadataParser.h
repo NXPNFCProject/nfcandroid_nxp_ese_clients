@@ -59,7 +59,9 @@ struct LoadUpdateScriptMetaInfo {
   std::vector<uint8_t> applet_aid_partial;
   std::vector<uint8_t> elf_aid_complete;
   std::vector<uint8_t> elf_version;
-  std::vector<uint8_t> signature;
+  std::vector<std::pair<std::vector<uint8_t>, std::streampos>>
+      signatures;  // multiple SEMS scripts embedded within one file
+
   std::string script_path;
   uint8_t platform_id;
 };

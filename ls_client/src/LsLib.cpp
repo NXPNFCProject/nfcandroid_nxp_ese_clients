@@ -238,7 +238,8 @@ tLSC_STATUS LsLib_SemsDeSelect() {
 **
 *******************************************************************************/
 tLSC_STATUS Perform_LSC(const char* name, const char* dest,
-                        const uint8_t* pdata, uint16_t len, uint8_t* respSW) {
+                        std::streampos start_offset, const uint8_t* pdata,
+                        uint16_t len, uint8_t* respSW) {
   static const char fn[] = "Perform_LSC";
   tLSC_STATUS status = STATUS_FAILED;
   ALOGD("%s: enter; sha-len=%d", fn, len);
@@ -251,7 +252,8 @@ tLSC_STATUS Perform_LSC(const char* name, const char* dest,
     StoreData[0] = STORE_DATA_TAG;
     StoreData[1] = len;
     memcpy(&StoreData[2], pdata, len);
-    status = LSC_update_seq_handler(Applet_load_seqhandler, name, dest);
+    status = LSC_update_seq_handler(Applet_load_seqhandler, start_offset, name,
+                                    dest);
     if ((status != STATUS_OKAY) && (lsExecuteResp[2] == 0x90) &&
         (lsExecuteResp[3] == 0x00)) {
       lsExecuteResp[2] = LS_ABORT_SW1;
@@ -277,7 +279,7 @@ tLSC_STATUS Perform_LSC(const char* name, const char* dest,
 tLSC_STATUS LSC_update_seq_handler(
     tLSC_STATUS (*seq_handler[])(Lsc_ImageInfo_t* pContext, tLSC_STATUS status,
                                  Lsc_TranscieveInfo_t* pInfo),
-    const char* name, const char* dest) {
+    std::streampos start_offset, const char* name, const char* dest) {
   static const char fn[] = "LSC_update_seq_handler";
   uint16_t seq_counter = 0;
   Lsc_ImageInfo_t update_info =
@@ -300,7 +302,8 @@ tLSC_STATUS LSC_update_seq_handler(
   // memcpy(update_info.fls_path, (char*)Lsc_path, sizeof(Lsc_path));
   strlcat(update_info.fls_path, name, sizeof(update_info.fls_path));
   ALOGD("Start execution of script: %s", update_info.fls_path);
-
+  update_info.fls_start_offset = static_cast<long long>(start_offset);
+  ALOGD("Start offset: %lld", update_info.fls_start_offset);
   while ((seq_handler[seq_counter]) != NULL) {
     status = STATUS_FAILED;
     status = (*(seq_handler[seq_counter]))(&update_info, status, &trans_info);
@@ -405,6 +408,10 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     if (semsPresent) {
       if (Os_info->isUpdaterMode) {
         cmdApdu.len = (int32_t)(AID_ARRAY[0]);
+        ALOGD("UpdaterMode AID is: %s",
+              toString(std::vector<uint8_t>(&AID_ARRAY[2],
+                                            (&AID_ARRAY[2] + cmdApdu.len - 1)))
+                  .c_str());
         cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
         cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
         memcpy(&(cmdApdu.p_data[1]), &AID_ARRAY[2], cmdApdu.len - 1);
@@ -617,11 +624,14 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     ALOGE("Error ftelling file %s", strerror(errno));
     goto exit;
   }
-  wResult = fseek(Os_info->fp, 0L, SEEK_SET);
+  wResult = fseek(Os_info->fp, 0L + Os_info->fls_start_offset, SEEK_SET);
   if (wResult) {
     ALOGE("Error seeking start image file %s", strerror(errno));
     goto exit;
   }
+  Os_info->bytes_read += Os_info->fls_start_offset;
+  ALOGD("Reset bytes_read to %lld",
+        static_cast<long long>(Os_info->bytes_read));
   status = LSC_Check_KeyIdentifier(Os_info, status, pTranscv_Info, NULL,
                                    STATUS_FAILED, 0);
   if (status != STATUS_OKAY) {
@@ -699,22 +709,11 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
       ALOGD("TAGID: Encountered again certificate tag 7F21");
       if (tag40_found == STATUS_OKAY) {
         ALOGD("2nd Script processing starts with reselect");
-        status = STATUS_FAILED;
-        status = LSC_SelectLsc(Os_info, status, pTranscv_Info);
-        if (status == STATUS_OKAY) {
-          ALOGD("2nd Script select success next store data command");
-          status = STATUS_FAILED;
-          status = LSC_StoreData(Os_info, status, pTranscv_Info);
-          if (status == STATUS_OKAY) {
-            ALOGD(
-                "2nd Script store data success next certificate verification");
-            offset = offset + 2;
-            len_byte = Numof_lengthbytes(&temp_buf[offset], &wLen);
-            status = LSC_Check_KeyIdentifier(Os_info, status, pTranscv_Info,
-                                             temp_buf, STATUS_OKAY,
-                                             wLen + len_byte + 2);
-          }
-        }
+        offset = offset + 2;
+        len_byte = Numof_lengthbytes(&temp_buf[offset], &wLen);
+        status =
+            LSC_Check_KeyIdentifier(Os_info, status, pTranscv_Info, temp_buf,
+                                    STATUS_OKAY, wLen + len_byte + 2);
         /*If the certificate and signature is verified*/
         if (status == STATUS_OKAY) {
           /*If the certificate is verified for 6320 then new
@@ -1185,11 +1184,17 @@ tLSC_STATUS LSC_CloseChannel(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
         ALOGE("Close channel id = 0x0%x is success",
               Os_info->Channel_Info[cnt].channel_id);
         status = STATUS_OKAY;
+        // reset the channel Id
+        ALOGI("Reset Channel_Info for channel cnt %d", cnt);
+        Os_info->Channel_Info[cnt].channel_id = 0;
+        Os_info->Channel_Info[cnt].isOpend = false;
       } else {
         ALOGE("Close channel id = 0x0%x is failed",
               Os_info->Channel_Info[cnt].channel_id);
       }
     }
+    ALOGD("Reset the channel count to 0");
+    Os_info->channel_cnt = 0;
   }
   ALOGD("%s: exit; status=0x0%x", fn, status);
   return status;
@@ -1276,9 +1281,9 @@ tLSC_STATUS LSC_ProcessResp(Lsc_ImageInfo_t* image_info, int32_t recvlen,
     memcpy(&AID_ARRAY[6], &RecvData[0], recvlen - 2);
     // memcpy(&ArrayOfAIDs[2][0], &AID_ARRAY[0], recvlen + 4);
     memcpy(&ArrayOfAIDs[LS_SELF_UPDATE_AID_IDX][0], &AID_ARRAY[0], recvlen + 4);
+    ALOGD("Record the Applet AID to be selected next");
     image_info->isUpdaterMode = true;
-    ALOGD("Recorded the sems updater AID");
-    status = STATUS_OKAY;
+    status = STATUS_FILE_NOT_FOUND;
 #ifdef NXP_BOOTTIME_UPDATE
     fAID_MEM = fopen(AID_MEM_PATH[gpLsc_Dwnld_Context->
       mchannel->getInterfaceInfo()], "w");
