@@ -53,6 +53,11 @@ void PerformUpdate(const std::string& script_dir_path);
  * Retries Prepare Update in case it was teared/failed
  */
 void RetryPrepareUpdate(const std::string& script_dir_path);
+
+/**
+ * Logs Version info from eSE and from Update package for each applet
+ */
+void LogVersionInfo(const std::string& script_dir_path);
 #ifdef NXP_BOOTTIME_UPDATE
 /**
  * Legacy method for checking if update is required

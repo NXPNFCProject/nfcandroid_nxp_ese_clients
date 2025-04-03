@@ -37,6 +37,9 @@
 #define MIN_METADATA_FIELDS_LOAD_UPDATE_SCRIPT 5
 #define MIN_METADATA_FIELDS_GETSTATUS_SCRIPT 2
 
+#define FIRST_COL_WIDTH 40
+#define OTHER_COL_WIDTH 20
+
 void PrintAllParsedMetadata();
 std::vector<struct LoadUpdateScriptMetaInfo> load_update_script;
 std::vector<struct SemsScriptInfo> all_scripts_info;
@@ -45,6 +48,8 @@ std::vector<struct GetStatusResponse> getstatus_response;
 
 ExecutionState exe_state;
 
+std::vector<std::string> rows;
+
 const std::vector<struct SemsScriptInfo> GetEnumeratedScriptsData() {
   return all_scripts_info;
 }
@@ -52,13 +57,17 @@ const std::vector<struct SemsScriptInfo> GetEnumeratedScriptsData() {
 const struct GetStatusScriptMetaInfo GetStatusScriptData() {
   return getstatus_script;
 }
-void ResetGlobalMetadataState() {
+void ResetGlobalMetadataState(bool clear_version_table) {
   load_update_script.clear();
   all_scripts_info.clear();
   getstatus_response.clear();
   memset(&getstatus_script, 0, sizeof(GetStatusScriptMetaInfo));
   exe_state = ExecutionState::GET_STATUS;
+  if (clear_version_table) {
+    rows.clear();
+  }
 }
+
 static uint8_t Numof_lengthbytes(uint8_t* read_buf, int32_t* pLen) {
   static const char fn[] = "Numof_lengthbytes";
   uint8_t len_byte = 0, i = 0;
@@ -142,7 +151,8 @@ std::string trim(const std::string& str) {
   return str.substr(first, last - first + 1);
 }
 
-SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path) {
+SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path,
+                                  bool clear_version_table) {
   std::string path = std::move(script_dir_path);
 
   DIR* dir = opendir(path.c_str());
@@ -151,7 +161,7 @@ SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path) {
     return SESTATUS_FILE_NOT_FOUND;
   }
 
-  ResetGlobalMetadataState();
+  ResetGlobalMetadataState(clear_version_table);
 
   struct dirent* entry;
   bool parse_success = true;
@@ -227,6 +237,27 @@ void DisplayAllScriptsInfo() {
       LOG(INFO) << "  UPDATE script does not exist";
   }
 }
+// Print version info from eSE and Update package for each applet
+void PrintVersionTable() {
+  std::ostringstream table;
+
+  // Header
+  table << "| " << std::left << std::setw(FIRST_COL_WIDTH) << "AppletAID"
+        << "| " << std::setw(OTHER_COL_WIDTH) << "Update Pkg Version"
+        << "| " << std::setw(OTHER_COL_WIDTH) << "Installed Version"
+        << "|\n";
+
+  // Separator
+  table << "|" << std::string(FIRST_COL_WIDTH, '-') << "-"
+        << "|" << std::string(OTHER_COL_WIDTH, '-') << "-"
+        << "|" << std::string(OTHER_COL_WIDTH, '-') << "-|\n";
+
+  // Combine header and rows
+  for (const auto& row : rows) {
+    table << row << "\n";
+  }
+  LOG(INFO) << "\n" << table.str();
+}
 
 void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
   for (int i = 0; i < all_scripts_info.size(); i++) {
@@ -260,28 +291,25 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
         }
       }
     }
+    std::vector<uint8_t> installed_elf_version;
     // check if UPDATE script is required
     // Assuming existing installed_elf_aid is different
     // from the ELF AID we are updating to
     if (applet_exists) {
-      std::vector<uint8_t> installed_elf_version;
       auto installed_elf_aid = getstatus_response[k].associated_elf_aid;
       for (auto matching_elf : getstatus_response[k].matching_elfs) {
         if (installed_elf_aid == matching_elf.elf_aid_complete) {
-          LOG(INFO) << "matched elf aid" << toString(installed_elf_aid);
+          LOG(INFO) << "Installed elf aid" << toString(installed_elf_aid);
           LOG(INFO) << "script_elf_ver:" << toString(update_script_elf_ver);
-          LOG(INFO) << "matching_elf_ver:"
+          LOG(INFO) << "Installed_elf_ver:"
                     << toString(matching_elf.elf_version);
+          installed_elf_version = matching_elf.elf_version;
           if (update_script_elf_ver.size() == 2) {
-            if (update_script_elf_ver[0] > matching_elf.elf_version[0]) {
+            if (update_script_elf_ver[0] > matching_elf.elf_version[0] ||
+                (update_script_elf_ver[0] == matching_elf.elf_version[0] &&
+                 update_script_elf_ver[1] > matching_elf.elf_version[1])) {
               update_required = true;
               break;
-            } else if (update_script_elf_ver[0] ==
-                       matching_elf.elf_version[0]) {
-              if (update_script_elf_ver[1] > matching_elf.elf_version[1]) {
-                update_required = true;
-                break;
-              }
             }
           }
         }
@@ -297,8 +325,20 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
     if (load_required) {
       *load_req = true;
     }
+    LOG(INFO) << "AppletAID: "
+              << toString(getstatus_response[k].applet_aid_partial);
+    LOG(INFO) << "Update Pkg Version: " << toString(update_script_elf_ver);
+    LOG(INFO) << "Installed Version: " << toString(installed_elf_version);
     all_scripts_info[i].update_required = update_required;
     all_scripts_info[i].pre_load_required = load_required;
+
+    // Build table row
+    std::ostringstream row;
+    row << "| " << std::left << std::setw(FIRST_COL_WIDTH)
+        << toString(getstatus_response[k].applet_aid_partial) << "| "
+        << std::setw(OTHER_COL_WIDTH) << toString(update_script_elf_ver) << "| "
+        << std::setw(OTHER_COL_WIDTH) << toString(installed_elf_version) << "|";
+    rows.push_back(row.str());
   }
 }
 void ParseResponseLocal(GetStatusResponseType resp_type,

@@ -46,6 +46,7 @@ int main(int argc, char* argv[]) {
     LOG(INFO) << "perform action apply-update";
     PerformUpdate(script_dir_path);
   } else if (!strcmp(argv[1], "log-status")) {
+    LogVersionInfo(script_dir_path);
   } else if (!strcmp(argv[1], "retry-check-update")) {
     LOG(INFO) << "perform action retry-check-update";
     RetryPrepareUpdate(script_dir_path);

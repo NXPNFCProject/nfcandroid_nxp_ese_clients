@@ -100,7 +100,8 @@ const std::vector<struct SemsScriptInfo> GetEnumeratedScriptsData();
  * Parses metadata field for all scripts available under
  * dir script_dir_path
  */
-SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path);
+SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path,
+                                  bool clear_version_table = true);
 
 /**
  * Parses response received during GETSTATUS script execution
@@ -119,6 +120,11 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req);
  * Sets current execution state
  */
 void SetScriptExecutionState(ExecutionState script_exe_state);
+
+/**
+ * Prints version from eSE and from update pkg(scripts) in tabular format
+ */
+void PrintVersionTable();
 
 /**
  * Utility function to print vector contents

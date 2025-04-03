@@ -424,7 +424,6 @@ void PerformUpdate(const std::string& script_dir_path) {
 }
 
 void CheckAndApplyUpdate(const std::string& script_dir_path) {
-
   current_transport = TransportType::HAL_TO_HAL;
   auto status = ParseSemsScriptsMetadata(script_dir_path);
   if (status != SESTATUS_OK) {
@@ -638,4 +637,36 @@ SESTATUS eSEUpdate_SeqHandler(const char* path, std::streampos start_offset) {
       break;
   }
   return status;
+}
+
+/*******************************************************************************
+**
+** Function:        LogVersionInfo
+**
+** Description:     Gets version info for each applet from eSE and SEMS scripts
+**                  and logs them in logcat
+**
+** Returns:         void
+**
+*******************************************************************************/
+
+void LogVersionInfo(const std::string& script_dir_path) {
+  std::string sems_self_update_dir_path =
+      script_dir_path + "/" + SEMS_SELF_UPDATE_DIR_NAME;
+  std::vector<std::string> update_pkg_path = {std::move(sems_self_update_dir_path),
+                                              script_dir_path};
+
+  current_transport = TransportType::HAL_TO_OMAPI;
+
+  for (const auto& path : update_pkg_path) {
+    auto status = ParseSemsScriptsMetadata(path, false /*clear version table*/);
+    if (status == SESTATUS_OK) {
+      bool load_req = false, update_req = false;
+      status = CheckAppletUpdateRequired(&load_req, &update_req);
+      if (status != SESTATUS_OK) {
+        ALOGE("Failed to check if update is required");
+      }
+    }
+  }
+  PrintVersionTable();
 }
