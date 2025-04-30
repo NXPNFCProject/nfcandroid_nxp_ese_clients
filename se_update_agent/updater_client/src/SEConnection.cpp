@@ -41,6 +41,10 @@ SEConnection::SEConnection(TransportType transport)
   LOG(INFO) << "Constructed SEConnection obj";
 }
 
+void SEConnection::getAtr(std::vector<uint8_t>& atr) {
+  LOG(INFO) << "Get ATR Info";
+  transport_->getAtr(atr);
+}
 SEConnection& SEConnection::getInstance(TransportType transport) {
   static SEConnection instance(transport);
   return instance;

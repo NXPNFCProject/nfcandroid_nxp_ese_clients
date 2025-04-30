@@ -68,6 +68,7 @@ class OmapiTransport : public ITransport {
         session(nullptr),
         channel(nullptr),
         mVSReaders({}) {
+    mAtr.clear();
     mDeathRecipient = ::ndk::ScopedAIBinder_DeathRecipient(
         AIBinder_DeathRecipient_new(BinderDiedCallback));
   }
@@ -103,6 +104,11 @@ class OmapiTransport : public ITransport {
    */
   void closeConnection();
 
+  /**
+   * Gets ATR info from eSE.
+   */
+  void getAtr(std::vector<uint8_t>& atr);
+
  private:
   std::shared_ptr<aidl::android::se::omapi::ISecureElementService>
       omapiSeService;
@@ -112,6 +118,7 @@ class OmapiTransport : public ITransport {
   std::map<std::string,
            std::shared_ptr<aidl::android::se::omapi::ISecureElementReader>>
       mVSReaders;
+  std::vector<uint8_t> mAtr;
   bool initialize();
   bool internalTransmitApdu(
       std::shared_ptr<aidl::android::se::omapi::ISecureElementReader> reader,

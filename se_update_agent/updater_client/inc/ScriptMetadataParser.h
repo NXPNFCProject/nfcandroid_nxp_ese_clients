@@ -104,6 +104,11 @@ SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path,
                                   bool clear_version_table = true);
 
 /**
+ * Filter parsed metadata files applicable for current chiptype
+ */
+void FilterScriptsForChiptype(std::vector<uint8_t>& chip_type);
+
+/**
  * Parses response received during GETSTATUS script execution
  * ignores otherwise
  */

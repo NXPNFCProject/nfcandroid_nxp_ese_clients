@@ -70,6 +70,22 @@ int16_t SE_Open() {
   return SESTATUS_OK;
 }
 
+SESTATUS InitializeConnection() {
+  uint8_t retry = 0;
+  const uint32_t MAX_RETRY_COUNT = 60;  // 60 secs
+  while (retry++ < MAX_RETRY_COUNT) {
+    if (!SEConnection::getInstance(current_transport).initialize()) {
+      ALOGD("Failed to initailize eSEHAL. Retrying(%d/%d) after 1 sec", retry,
+            MAX_RETRY_COUNT);
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(1000));  // re-try every 1 sec
+    } else {
+      return SESTATUS_OK;
+    }
+  }
+  return SESTATUS_FAILED;
+}
+
 bool SE_Transmit(uint8_t* xmitBuffer, int32_t xmitBufferSize,
                  uint8_t* recvBuffer, int32_t recvBufferMaxSize,
                  int32_t& recvBufferActualSize, int32_t timeoutMillisec) {
@@ -77,18 +93,7 @@ bool SE_Transmit(uint8_t* xmitBuffer, int32_t xmitBufferSize,
 
   std::vector<uint8_t> cmd_vec(xmitBuffer, xmitBuffer + xmitBufferSize);
   ALOGD("cmd_vec is %s", toString(cmd_vec).c_str());
-  uint8_t retry = 0;
-  const uint32_t MAX_RETRY_COUNT = 60;  // 60 secs
-  while (retry++ < MAX_RETRY_COUNT) {
-    if (!SEConnection::getInstance().initialize()) {
-      ALOGD("Failed to initailize eSEHAL. Retrying(%d/%d) after 1 sec", retry,
-            MAX_RETRY_COUNT);
-      std::this_thread::sleep_for(
-          std::chrono::milliseconds(1000));  // re-try every 1 sec
-    } else {
-      break;
-    }
-  }
+  InitializeConnection();
 
   if (cmd_vec.size() >= 3 && cmd_vec[0] == 0x00 && cmd_vec[1] == 0xA4 &&
       cmd_vec[2] == 0x04) {
@@ -310,12 +315,25 @@ static SESTATUS GetInterruptedScriptPath(std::string& interrupted_script_path,
   }
   return status;
 }
-
+static SESTATUS ParseSemsScriptsMetadataInternal(
+    const std::string& script_dir_path, bool clear_version_table = true) {
+  auto status = ParseSemsScriptsMetadata(script_dir_path, clear_version_table);
+  if (status == SESTATUS_OK) {
+    status = InitializeConnection();
+    if (status == SESTATUS_OK) {
+      std::vector<uint8_t> atr;
+      SEConnection::getInstance().getAtr(atr);
+      std::vector<uint8_t> chip_type(atr.begin(), atr.begin() + 5);
+      FilterScriptsForChiptype(chip_type);
+    }
+  }
+  return status;
+}
 // check and resume interrupted script execution
 
 static SESTATUS ResumeInterruptedScript(const std::string& script_dir_path,
                                         ExecutionState exe_state) {
-  auto status = ParseSemsScriptsMetadata(script_dir_path);
+  auto status = ParseSemsScriptsMetadataInternal(script_dir_path);
   if (status != SESTATUS_OK) {
     return status;
   }
@@ -425,7 +443,7 @@ void PerformUpdate(const std::string& script_dir_path) {
 
 void CheckAndApplyUpdate(const std::string& script_dir_path) {
   current_transport = TransportType::HAL_TO_HAL;
-  auto status = ParseSemsScriptsMetadata(script_dir_path);
+  auto status = ParseSemsScriptsMetadataInternal(script_dir_path);
   if (status != SESTATUS_OK) {
     return;
   }
@@ -659,7 +677,8 @@ void LogVersionInfo(const std::string& script_dir_path) {
   current_transport = TransportType::HAL_TO_OMAPI;
 
   for (const auto& path : update_pkg_path) {
-    auto status = ParseSemsScriptsMetadata(path, false /*clear version table*/);
+    auto status =
+        ParseSemsScriptsMetadataInternal(path, false /*clear version table*/);
     if (status == SESTATUS_OK) {
       bool load_req = false, update_req = false;
       status = CheckAppletUpdateRequired(&load_req, &update_req);

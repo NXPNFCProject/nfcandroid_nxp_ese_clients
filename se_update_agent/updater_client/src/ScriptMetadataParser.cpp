@@ -50,6 +50,12 @@ ExecutionState exe_state;
 
 std::vector<std::string> rows;
 
+static std::vector<std::pair<std::vector<uint8_t>, PlatformID>> ChipIds = {
+    {{0x00, 0x00, 0x00, 0x00, 0x20}, PlatformID::SN220_V3},
+    {{0x00, 0x00, 0x00, 0x00, 0x21}, PlatformID::SN220_V5},
+    {{0x00, 0x00, 0x00, 0x00, 0x30}, PlatformID::SN300},
+};
+
 const std::vector<struct SemsScriptInfo> GetEnumeratedScriptsData() {
   return all_scripts_info;
 }
@@ -183,10 +189,12 @@ SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path,
     closedir(dir);
   }
   if (!parse_success || getstatus_script.script_path.empty()) {
-    LOG(ERROR) << "Failed to parse script or getstatus script is not found";
+    LOG(ERROR)
+        << "Failed to parse script or getstatus script is not found under "
+        << path;
     return SESTATUS_FILE_NOT_FOUND;
   }
-  PrintAllParsedMetadata();
+
   for (int i = 0; i < getstatus_script.applet_aids_partial.size(); i++) {
     std::vector<uint8_t> partial_aid = getstatus_script.applet_aids_partial[i];
     LOG(DEBUG) << "partial_aid: " << toString(partial_aid);
@@ -215,6 +223,73 @@ SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path,
   return SESTATUS_OK;
 }
 
+void FilterScriptsForChiptype(std::vector<uint8_t>& chip_type) {
+  // find corresponding platformID
+  PlatformID p_id = PlatformID::INVALID;
+  for (const auto& item : ChipIds) {
+    if (item.first == chip_type) {
+      p_id = item.second;
+      break;
+    }
+  }
+
+  LOG(INFO) << "Platform/ChipID is: " << p_id;
+  std::vector<struct SemsScriptInfo> temp_all_scripts_info;
+
+  for (auto& script : all_scripts_info) {
+    bool script_invalid = false;
+    switch (p_id) {
+      case PlatformID::SN220_V3: {
+        if (script.load_script_exists) {
+          LOG(INFO)
+              << "LOAD_SCRIPT Type is not supported for chiptype:SN220_V3";
+          script_invalid = true;
+        } else if (script.update_script_exists &&
+                   script.update_script.platform_id != PlatformID::SN220_V3) {
+          LOG(INFO) << "Script is invalid for chiptype:SN220_V3";
+          script_invalid = true;
+        }
+      } break;
+      case PlatformID::SN220_V5:
+        script_invalid =
+            script.load_script_exists
+                ? (script.load_script.platform_id != PlatformID::SN220_V5)
+                : 0;
+        script_invalid |=
+            script.update_script_exists
+                ? (script.update_script.platform_id != PlatformID::SN220_V5)
+                : 0;
+        if (script_invalid) {
+          LOG(INFO) << "Script is invalid for chiptype:SN220_V5";
+        }
+        break;
+      case PlatformID::SN300:
+      case PlatformID::SN330:
+        script_invalid =
+            script.load_script_exists
+                ? (script.load_script.platform_id != PlatformID::SN300 &&
+                   script.load_script.platform_id != PlatformID::SN330)
+                : 0;
+        script_invalid |=
+            script.update_script_exists
+                ? (script.update_script.platform_id != PlatformID::SN300 &&
+                   script.update_script.platform_id != PlatformID::SN330)
+                : 0;
+        if (script_invalid) {
+          LOG(INFO) << "Script is invalid for chiptype:SN300/SN330";
+        }
+        break;
+      default:
+        script_invalid = true;
+        break;
+    }
+    if (!script_invalid) {
+      temp_all_scripts_info.push_back(script);
+    }
+  }
+  all_scripts_info.clear();
+  all_scripts_info = temp_all_scripts_info;
+}
 // Print enumerated data for each SEMS script
 void DisplayAllScriptsInfo() {
   LOG(INFO) << "Printing All scripts info";

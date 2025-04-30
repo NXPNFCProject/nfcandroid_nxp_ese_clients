@@ -39,6 +39,11 @@ class SEConnection {
   static SEConnection& getInstance(TransportType transport = HAL_TO_OMAPI);
 
   /**
+   * Get ATR info from eSE
+   */
+  void getAtr(std::vector<uint8_t>& atr);
+
+  /**
    *  Singleton instance
    * mark default constructor and copy operator delete
    */

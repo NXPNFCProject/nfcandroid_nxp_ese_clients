@@ -131,7 +131,33 @@ bool OmapiTransport::initialize() {
     LOG(ERROR) << "secure element reader " << ESE_READER_PREFIX << " not found";
     return false;
   }
+  // Get ATR
+  bool ese_reader_status = false;
+  auto res = eSEReader->isSecureElementPresent(&ese_reader_status);
+  if (!res.isOk()) {
+    LOG(ERROR) << "isSecureElementPresent error: " << res.getMessage();
+  }
+  if (!ese_reader_status) {
+    LOG(ERROR) << "secure element not found";
+  }
 
+  if (session == nullptr ||
+      ((session->isClosed(&ese_reader_status).isOk() && ese_reader_status))) {
+    res = eSEReader->openSession(&session);
+    if (!res.isOk()) {
+      LOG(ERROR) << "openSession error: " << res.getMessage();
+    }
+    if (session == nullptr) {
+      LOG(ERROR) << "Could not open session null";
+    } else {
+      res = session->getAtr(&mAtr);
+      if (!res.isOk()) {
+        LOG(ERROR) << "Failed to get ATR";
+      }
+      session->close();
+      session = nullptr;
+    }
+  }
   return true;
 }
 
@@ -293,4 +319,6 @@ bool OmapiTransport::openChannel(std::vector<uint8_t>& aid, int8_t& channel_num,
   }
   return true;
 }
+
+void OmapiTransport::getAtr(std::vector<uint8_t>& atr) { atr = this->mAtr; }
 }  // namespace se_update_agent

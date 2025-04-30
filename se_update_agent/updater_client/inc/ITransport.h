@@ -78,5 +78,10 @@ class ITransport {
    * is active, false if connection is broken.
    */
   virtual bool isConnected() = 0;
+
+  /**
+   * Gets ATR info from eSE.
+   */
+  virtual void getAtr(std::vector<uint8_t>& atr) = 0;
 };
 }  // namespace se_update_agent

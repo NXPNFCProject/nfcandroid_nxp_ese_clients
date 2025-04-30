@@ -102,6 +102,12 @@ bool HalToHalTransport::openConnection() {
       LOG(ERROR) << "Failed to initialize SE HAL service";
     }
   }
+  if (connected) {
+    auto status = mSecureElement->getAtr(&mAtr);
+    if (status.isOk()) {
+      LOG(INFO) << "Got ATR Successfully";
+    }
+  }
   return connected;
 }
 
@@ -165,4 +171,5 @@ bool HalToHalTransport::isConnected() {
   return true;
 }
 
+void HalToHalTransport::getAtr(std::vector<uint8_t>& atr) { atr = this->mAtr; }
 }  // namespace se_update_agent

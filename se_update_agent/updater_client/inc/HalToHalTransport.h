@@ -80,7 +80,13 @@ class HalToHalTransport : public ITransport {
    */
   bool isConnected() override;
 
+  /**
+   * Gets ATR info from eSE.
+   */
+  void getAtr(std::vector<uint8_t>& atr);
+
  private:
+  std::vector<uint8_t> mAtr;
   std::shared_ptr<ISecureElement> mSecureElement;
   std::shared_ptr<SecureElementCallback> mSecureElementCallback;
   ::ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
