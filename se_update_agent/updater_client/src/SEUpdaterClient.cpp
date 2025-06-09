@@ -194,6 +194,134 @@ SESTATUS perform_eSEClientUpdate() {
 }
 #endif  // NXP_BOOTTIME_UPDATE
 
+// Parses memory response from secure element using iterators
+bool parseMemoryResponse(const std::vector<uint8_t>& ese_mem_data_all,
+                         struct eSEAvailableMemory& ese_memory_parsed) {
+  constexpr size_t kMinResponseSize = 43;
+  constexpr uint16_t kStatusSuccess = 0x9000;
+
+  if (ese_mem_data_all.size() < kMinResponseSize) {
+    ALOGE("Response too short: %zu bytes, expected >= %zu",
+          ese_mem_data_all.size(), kMinResponseSize);
+    return false;
+  }
+
+  if ((ese_mem_data_all[ese_mem_data_all.size() - 2] << 8 |
+       ese_mem_data_all.back()) != kStatusSuccess) {
+    ALOGE("Invalid status word: %s", toString(ese_mem_data_all).c_str());
+    return false;
+  }
+
+  // Use iterator for sequential access
+  auto it = ese_mem_data_all.cbegin();
+  auto end = ese_mem_data_all.cend() - 2;  // ignore status word
+
+  it += 2;  // Skip first two bytes (e.g., header)
+  uint16_t tag = (*it++ << 8) | *it++;
+  if (tag != AVL_MEMORY_TAG) {
+    ALOGE("Invalid tag: 0x%04x, expected 0x%04x", tag, AVL_MEMORY_TAG);
+    return false;
+  }
+
+  // Check length (1 byte)
+  uint8_t length = *it++;
+  if (length != EXPECTED_LENGTH) {
+    ALOGE("Invalid length: %d, expected %d", length, EXPECTED_LENGTH);
+    return false;
+  }
+  for (; it != end;) {
+    uint8_t tag = *it++;
+    it++;  // Skip length byte
+    switch (tag) {
+      case MEM_TAG_00:
+        ese_memory_parsed.tag_00 =
+            (*it++ << 24) | (*it++ << 16) | (*it++ << 8) | *it++;
+        break;
+      case MEM_TAG_01:
+        ese_memory_parsed.tag_01 =
+            (*it++ << 24) | (*it++ << 16) | (*it++ << 8) | *it++;
+        break;
+      case MEM_TAG_02:
+        ese_memory_parsed.tag_02 =
+            (*it++ << 24) | (*it++ << 16) | (*it++ << 8) | *it++;
+        break;
+      case MEM_TAG_03:
+        ese_memory_parsed.tag_03 =
+            (*it++ << 24) | (*it++ << 16) | (*it++ << 8) | *it++;
+        break;
+      case MEM_TAG_07:
+        ese_memory_parsed.tag_07 =
+            (*it++ << 24) | (*it++ << 16) | (*it++ << 8) | *it++;
+        break;
+      case MEM_TAG_08:
+        ese_memory_parsed.tag_08 =
+            (*it++ << 24) | (*it++ << 16) | (*it++ << 8) | *it++;
+        break;
+      default:
+        ALOGE("*** Error: unexpected byte: 0x%02X\n", tag);
+        return false;
+    }
+  }
+  return true;
+}
+
+std::vector<uint8_t> getAvailableMemoryFromSE() {
+  std::vector<uint8_t> resp_vec;
+  if (InitializeConnection() == SESTATUS_OK) {
+    std::vector<uint8_t> card_manager_aid = {0xA0, 0x00, 0x00, 0x01,
+                                             0x51, 0x00, 0x00, 0x00};
+    std::vector<uint8_t> select_resp;
+    int8_t channel_num = -1;
+    SEConnection::getInstance().transport_->openChannel(
+        card_manager_aid, channel_num, select_resp);
+
+    if (channel_num != -1) {
+      ALOGD("AID Select Response: %s", toString(select_resp).c_str());
+      ALOGD("Selected channel number for AID: %d",
+            static_cast<int>(channel_num));
+      // Get Available Memory C-APDU
+      std::vector<uint8_t> get_avl_memory_cmd = {0x80, 0xCA, 0x00, 0xFE,
+                                                 0x02, 0xDF, 0x25};
+      get_avl_memory_cmd[0] |= channel_num;
+      auto status = SEConnection::getInstance().transport_->sendData(
+          get_avl_memory_cmd, resp_vec);
+      if (status) {
+        // cmd transmitted succesfully
+        ALOGD("resp_vec is %s", toString(resp_vec).c_str());
+      } else {
+        ALOGE("Failed to send GetAvailableMemory C-APDU");
+      }
+      status =
+          SEConnection::getInstance().transport_->closeChannel(channel_num);
+    } else {
+      ALOGE("Failed to open Channel to AID: ");
+    }
+  }
+  return resp_vec;
+}
+bool canInstallApplet(const struct LoadUpdateScriptMetaInfo& current_script) {
+  bool result = true;
+  struct eSEAvailableMemory ese_memory_parsed;
+  std::vector<uint8_t> ese_memory_data = getAvailableMemoryFromSE();
+
+  // Perform memory check only if getAvailableMemory cmd returns successful resp
+  if (!ese_memory_data.empty() &&
+      parseMemoryResponse(ese_memory_data, ese_memory_parsed)) {
+    auto avl_nvm_bytes = ese_memory_parsed.tag_00;
+    auto avl_ram_bytes = ese_memory_parsed.tag_01;
+
+    if (current_script.mem_req.min_volatile_memory_bytes > avl_ram_bytes ||
+        current_script.mem_req.min_non_volatile_memory_bytes > avl_nvm_bytes) {
+      ALOGE("Insufficient memory for script %s: RAM %u/%u, NVM %u/%u",
+            current_script.script_path.c_str(), avl_ram_bytes,
+            current_script.mem_req.min_volatile_memory_bytes, avl_nvm_bytes,
+            current_script.mem_req.min_non_volatile_memory_bytes);
+      result = false;
+    }
+  }
+  return result;
+}
+
 static SESTATUS ExecuteSemsScript(const char* script_path,
                                   std::streampos start_offset,
                                   ExecutionState exec_state) {
@@ -282,6 +410,7 @@ static SESTATUS GetInterruptedScriptPath(std::string& interrupted_script_path,
   std::vector<uint8_t> interrupted_sems_auth_frame_sign;
   auto status = getLastScriptExecutionState(&sems_interrupted,
                                             interrupted_sems_auth_frame_sign);
+  const LoadUpdateScriptMetaInfo* interrupted_script = nullptr;
   if (sems_interrupted) {
     ALOGD("Execution was interrupted for script with signature: %s",
           toString(interrupted_sems_auth_frame_sign).c_str());
@@ -293,7 +422,7 @@ static SESTATUS GetInterruptedScriptPath(std::string& interrupted_script_path,
                                current_script.load_script.signatures,
                                &start_offset)) {
         if (exe_state == ExecutionState::LOAD) {
-          interrupted_script_path = current_script.load_script.script_path;
+          interrupted_script = &(current_script.load_script);
         } else {
           ALOGE("Not in required execution state Expected LOAD, Found %d",
                 exe_state);
@@ -304,13 +433,17 @@ static SESTATUS GetInterruptedScriptPath(std::string& interrupted_script_path,
                                current_script.update_script.signatures,
                                &start_offset)) {
         if (exe_state == ExecutionState::UPDATE) {
-          interrupted_script_path = current_script.update_script.script_path;
+          interrupted_script = &(current_script.update_script);
         } else {
           ALOGE("Not in required execution state Expected UPDATE, Found %d",
                 exe_state);
         }
         break;
       }
+    }
+    if (interrupted_script != nullptr &&
+        canInstallApplet(*interrupted_script)) {
+      interrupted_script_path = interrupted_script->script_path;
     }
   }
   return status;
@@ -485,6 +618,7 @@ void RetryPrepareUpdate(const std::string& script_dir_path) {
                                std::to_string(retry_cnt));
   }
 }
+
 // Iterate over all parsed scripts and execute based on current execution state
 SESTATUS ApplyUpdate(ExecutionState exe_state) {
   SESTATUS status = SESTATUS_OK;
@@ -506,14 +640,15 @@ SESTATUS ApplyUpdate(ExecutionState exe_state) {
             ALOGE("pre_load is not completed for %s.. aborting",
                   current_script.update_script.script_path.c_str());
             preload_pending = true;
-          } else {
+          } else if (canInstallApplet(current_script.update_script)) {
             script_path = current_script.update_script.script_path;
           }
         }
         break;
       case ExecutionState::LOAD:
         if (current_script.pre_load_required &&
-            current_script.load_script_exists) {
+            current_script.load_script_exists &&
+            canInstallApplet(current_script.load_script)) {
           script_path = current_script.load_script.script_path;
         }
         break;

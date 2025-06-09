@@ -30,6 +30,7 @@
 #include <iostream>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -728,6 +729,34 @@ int ParseSemsMetadata(const char* path) {
           x = x + 2;
         }
         if (IsDuplicateEntry(load_update_script_metafields, "ELFVersion")) {
+          return 1;
+        }
+      }
+      if (!metadata[i].first.compare(0, strlen("MinVolatileMemory"),
+                                     "MinVolatileMemory")) {
+        try {
+          load_update_script_temp.mem_req.min_volatile_memory_bytes =
+              static_cast<uint32_t>(
+                  std::stoul(metadata[i].second.first.c_str(), nullptr, 16));
+        } catch (const std::invalid_argument& e) {
+          LOG(ERROR) << "Value is not a valid hex number\n";
+        }
+        if (IsDuplicateEntry(load_update_script_metafields,
+                             "MinVolatileMemory")) {
+          return 1;
+        }
+      }
+      if (!metadata[i].first.compare(0, strlen("MinNonVolatileMemory"),
+                                     "MinNonVolatileMemory")) {
+        try {
+          load_update_script_temp.mem_req.min_non_volatile_memory_bytes =
+              static_cast<uint32_t>(
+                  std::stoul(metadata[i].second.first.c_str(), nullptr, 16));
+        } catch (const std::invalid_argument& e) {
+          LOG(ERROR) << "Value is not a valid hex number\n";
+        }
+        if (IsDuplicateEntry(load_update_script_metafields,
+                             "MinNonVolatileMemory")) {
           return 1;
         }
       }

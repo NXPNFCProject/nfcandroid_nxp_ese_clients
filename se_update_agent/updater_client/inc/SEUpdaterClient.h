@@ -37,6 +37,26 @@ typedef enum {
 } ese_update_state_t;
 #endif
 
+struct eSEAvailableMemory {
+  uint32_t tag_00;  // available persistent memory [System]
+  uint32_t tag_01;  // available transient clear-on-reset memory [System]
+  uint32_t tag_02;  // available transient clear-on-deselect memory [System]
+  uint32_t tag_03;  // available number of indices in the index table [System]
+  uint32_t tag_07;  // available transient system memory, excluding CGM reserves
+                    // [System]
+  uint32_t tag_08;  // available persistent system memory, excluding CGM
+                    // reserves [System]
+};
+
+constexpr uint16_t AVL_MEMORY_TAG = 0xDF25;
+constexpr uint8_t EXPECTED_LENGTH = 0x24;
+constexpr uint8_t MEM_TAG_00 = 0x00;
+constexpr uint8_t MEM_TAG_01 = 0x01;
+constexpr uint8_t MEM_TAG_02 = 0x02;
+constexpr uint8_t MEM_TAG_03 = 0x03;
+constexpr uint8_t MEM_TAG_07 = 0x07;
+constexpr uint8_t MEM_TAG_08 = 0x08;
+
 /**
  * Checks and executes LOAD type Sems Script if required
  */
@@ -78,5 +98,9 @@ void eSEClientUpdate_SE_Thread();
  * Function to set current state
  */
 void seteSEClientState(uint8_t state);
+/**
+ * Retrieve metrics about the available memory in SecureElement.
+ */
+std::vector<uint8_t> getAvailableMemoryFromSE();
 #endif
 #endif /* ESE_UPDATE_2_H_ */

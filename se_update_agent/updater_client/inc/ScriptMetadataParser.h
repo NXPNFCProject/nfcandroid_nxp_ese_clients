@@ -54,11 +54,20 @@ struct GetStatusScriptMetaInfo {
   std::string script_path;
 };
 
+// Minimum memory requirements for installing a secure element applet.
+// All values are in bytes.
+struct AppletMemoryRequirements {
+  uint32_t min_volatile_memory_bytes;  // RAM needed during installation
+  uint32_t
+      min_non_volatile_memory_bytes;  // Flash/EEPROM for persistent storage
+};
+
 struct LoadUpdateScriptMetaInfo {
   SemsScriptType script_type;
   std::vector<uint8_t> applet_aid_partial;
   std::vector<uint8_t> elf_aid_complete;
   std::vector<uint8_t> elf_version;
+  AppletMemoryRequirements mem_req;
   std::vector<std::pair<std::vector<uint8_t>, std::streampos>>
       signatures;  // multiple SEMS scripts embedded within one file
 
