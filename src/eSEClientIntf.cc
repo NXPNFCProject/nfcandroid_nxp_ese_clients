@@ -17,22 +17,19 @@
  ******************************************************************************/
 
 #include "eSEClientIntf.h"
-#include <cutils/log.h>
-#include <dirent.h>
-#include <stdlib.h>
-#include <pthread.h>
-#ifdef NXP_BOOTTIME_UPDATE
 #include <IChannel.h>
-#endif
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
+#include <cutils/log.h>
+#include <dirent.h>
 #include <phNxpConfig.h>
+#include <pthread.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #define TERMINAL_LEN  5
 bool nfc_debug_enabled;
-#ifdef NXP_BOOTTIME_UPDATE
 void* performJCOS_Download_thread(void* data);
 IChannel_t Ch;
 static const char *path[3] = {"/vendor/etc/JcopOs_Update1.apdu",
@@ -273,7 +270,6 @@ bool geteUICCTerminalId(char* val)
   }
   return ret;
 }
-#endif /* NXP_BOOTTIME_UPDATE */
 
 bool getTruestedSETerminalId(char* val)
 {

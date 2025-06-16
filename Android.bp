@@ -37,7 +37,36 @@ cc_library_shared {
         "libbase",
         "libcutils",
         "libdl",
+        "liblog",
+        "libutils",
+        "libdl",
         "libhidlbase",
+    ],
+}
+
+cc_library_shared {
+
+    name: "jcos_client",
+    defaults: ["hidl_defaults"],
+    proprietary: true,
+
+    srcs: [
+        "jcos_client/src/JcDnld.cpp",
+        "jcos_client/src/JcopOsDownload.cpp",
+    ],
+
+    local_include_dirs: [
+        "inc",
+        "utils",
+        "jcos_client/inc",
+    ],
+    export_include_dirs: [
+        "jcos_client/inc",
+    ],
+    shared_libs: [
+        "libbase",
+        "libcutils",
+        "libdl",
         "liblog",
         "libutils",
         "libdl",
@@ -60,11 +89,14 @@ cc_library_shared {
         "utils",
         "ls_client/inc",
     ],
+    export_include_dirs: [
+        "ls_client/inc",
+    ],
+
     shared_libs: [
         "libbase",
         "libcutils",
         "libdl",
-        "libhidlbase",
         "liblog",
         "libutils",
         "libdl",

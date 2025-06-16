@@ -19,13 +19,11 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#ifdef NXP_BOOTTIME_UPDATE
 #include "data_types.h"
 typedef enum InterfaceInfo {
   INTF_NFC = 0,
   INTF_SE = 1,
 } IntfInfo;
-#endif
 typedef struct IChannel {
   /*******************************************************************************
   **
@@ -97,7 +95,6 @@ typedef struct IChannel {
   *******************************************************************************/
 
   void (*doeSE_Reset)();
-#ifdef NXP_BOOTTIME_UPDATE
   /*******************************************************************************
   **
   ** Function:        doeSE_JcopDownLoadReset
@@ -119,7 +116,6 @@ typedef struct IChannel {
   **
   *******************************************************************************/
   uint8_t (*getInterfaceInfo)();
-#endif
   /******************************************************************************
   **
   ** Function:        parse_response

@@ -13,76 +13,62 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
-#include <android-base/stringprintf.h>
-#include <base/logging.h>
-#include <data_types.h>
 #include "JcDnld.h"
+#include <android-base/logging.h>
+#include <android-base/stringprintf.h>
+#include <data_types.h>
 #include "JcopOsDownload.h"
 
-using android::base::StringPrintf;
+ using android::base::StringPrintf;
 
-JcopOsDwnld *jd;
-IChannel_t *channel;
-static bool inUse = false;
-static int16_t jcHandle;
-extern pJcopOs_Dwnld_Context_t gpJcopOs_Dwnld_Context;
-/*******************************************************************************
-**
-** Function:        JCDNLD_Init
-**
-** Description:     Initializes the JCOP library and opens the DWP communication channel
-**
-** Returns:         true if ok.
-**
-*******************************************************************************/
-tJBL_STATUS JCDNLD_Init(IChannel_t *channel)
-{
-    static const char fn[] = "JCDNLD_Init";
-    bool    stat = false;
-    jcHandle = EE_ERROR_OPEN_FAIL;
-    DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: enter", fn);
+ JcopOsDwnld* jd;
+ IChannel_t* channel;
+ static bool inUse = false;
+ static int16_t jcHandle;
+ extern pJcopOs_Dwnld_Context_t gpJcopOs_Dwnld_Context;
+ /*******************************************************************************
+ **
+ ** Function:        JCDNLD_Init
+ **
+ ** Description:     Initializes the JCOP library and opens the DWP
+ *communication channel
+ **
+ ** Returns:         true if ok.
+ **
+ *******************************************************************************/
+ tJBL_STATUS JCDNLD_Init(IChannel_t* channel) {
+   static const char fn[] = "JCDNLD_Init";
+   bool stat = false;
+   jcHandle = EE_ERROR_OPEN_FAIL;
+   LOG(INFO) << StringPrintf("%s: enter", fn);
 
-    if (inUse == true)
-    {
-        return STATUS_INUSE;
-    }
-    else if(channel == NULL)
-    {
-        return STATUS_FAILED;
-    }
-    /*TODO: inUse assignment should be with protection like using semaphore*/
-    inUse = true;
-    jd = JcopOsDwnld::getInstance();
-    stat = jd->initialize (channel);
-    if(stat != true)
-    {
-        LOG(ERROR) << StringPrintf("%s: failed", fn);
-    }
-    else
-    {
-        if((channel != NULL) &&
-           (channel->open) != NULL)
-        {
-            jcHandle = channel->open();
-            if(jcHandle == EE_ERROR_OPEN_FAIL)
-            {
-                LOG(ERROR) << StringPrintf("%s:Open DWP communication is failed", fn);
-                stat = false;
-            }
-            else
-            {
-                LOG(ERROR) << StringPrintf("%s:Open DWP communication is success", fn);
-                stat = true;
-            }
-        }
-        else
-        {
-            LOG(ERROR) << StringPrintf("%s: NULL DWP channel", fn);
-            stat = false;
-        }
-    }
-    return (stat == true)?STATUS_OKAY:STATUS_FAILED;
+   if (inUse == true) {
+     return STATUS_INUSE;
+   } else if (channel == NULL) {
+     return STATUS_FAILED;
+   }
+   /*TODO: inUse assignment should be with protection like using semaphore*/
+   inUse = true;
+   jd = JcopOsDwnld::getInstance();
+   stat = jd->initialize(channel);
+   if (stat != true) {
+     LOG(ERROR) << StringPrintf("%s: failed", fn);
+   } else {
+     if ((channel != NULL) && (channel->open) != NULL) {
+       jcHandle = channel->open();
+       if (jcHandle == EE_ERROR_OPEN_FAIL) {
+         LOG(ERROR) << StringPrintf("%s:Open DWP communication is failed", fn);
+         stat = false;
+       } else {
+         LOG(ERROR) << StringPrintf("%s:Open DWP communication is success", fn);
+         stat = true;
+       }
+     } else {
+       LOG(ERROR) << StringPrintf("%s: NULL DWP channel", fn);
+       stat = false;
+     }
+   }
+   return (stat == true) ? STATUS_OKAY : STATUS_FAILED;
 }
 
 /*******************************************************************************
@@ -97,12 +83,10 @@ tJBL_STATUS JCDNLD_Init(IChannel_t *channel)
 tJBL_STATUS JCDNLD_StartDownload()
 {
     static const char fn[] = "JCDNLD_StartDownload";
-    DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: Enter", fn);
+    LOG(INFO) << StringPrintf("%s: Enter", fn);
     tJBL_STATUS status = STATUS_FAILED;
     status = jd->JcopOs_Download();
-    DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: Exit; status=0x0%X", fn, status);
+    LOG(INFO) << StringPrintf("%s: Exit; status=0x0%X", fn, status);
     return status;
 }
 
@@ -119,8 +103,7 @@ bool JCDNLD_DeInit()
 {
     static const char fn[] = "JCDNLD_DeInit";
     bool    stat = false;
-    DLOG_IF(INFO, nfc_debug_enabled)
-      << StringPrintf("%s: enter", fn);
+    LOG(INFO) << StringPrintf("%s: enter", fn);
 
     if(gpJcopOs_Dwnld_Context != NULL)
     {

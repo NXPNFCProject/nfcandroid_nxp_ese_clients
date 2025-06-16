@@ -17,7 +17,6 @@
  ******************************************************************************/
 #ifndef CLIENT_INTF_H_
 #define CLIENT_INTF_H_
-#ifdef NXP_BOOTTIME_UPDATE
 #include <pthread.h>
 #include <string>
 
@@ -51,6 +50,8 @@ typedef enum {
 typedef enum {
   ESE_UPDATE_COMPLETED = 0,
   ESE_UPDATE_STARTED,
+  ESE_JCOP_UPDATE_REQUIRED,
+  ESE_JCOP_UPDATE_COMPLETED,
   ESE_LS_UPDATE_REQUIRED,
   ESE_LS_UPDATE_COMPLETED
 } ese_update_state_t;
@@ -76,7 +77,6 @@ void setLsUpdateRequired(uint8_t  state);
 
 bool geteSETerminalId(char*);
 bool geteUICCTerminalId(char*);
-#endif /* NXP_BOOTTIME_UPDATE */
 bool getTruestedSETerminalId(char* val);
 bool getNfcSeTerminalId(char*);
 #endif /* CLIENT_INTF_H_ */
