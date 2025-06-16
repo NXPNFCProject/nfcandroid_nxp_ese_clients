@@ -18,6 +18,7 @@
 
 #include "eSEClientIntf.h"
 #include <IChannel.h>
+#include <android-base/properties.h>
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
 #include <cutils/log.h>
@@ -301,4 +302,14 @@ bool getNfcSeTerminalId(char* val)
     }
   }
   return ret;
+}
+
+void initialize_debug_enabled_flag() {
+  unsigned long num = 0;
+  if (GetNxpNumValue(NAME_NFC_DEBUG_ENABLED, &num, sizeof(num))) {
+    nfc_debug_enabled = (num == 0) ? false : true;
+  } else {
+    nfc_debug_enabled = ::android::base::GetBoolProperty("nfc.debug_enabled", false);
+  }
+  ALOGI("nfc_debug_enabled : %d", nfc_debug_enabled);
 }

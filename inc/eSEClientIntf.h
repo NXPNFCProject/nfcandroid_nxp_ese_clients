@@ -79,5 +79,6 @@ bool geteSETerminalId(char*);
 bool geteUICCTerminalId(char*);
 bool getTruestedSETerminalId(char* val);
 bool getNfcSeTerminalId(char*);
+void initialize_debug_enabled_flag();
 #endif /* CLIENT_INTF_H_ */
 
