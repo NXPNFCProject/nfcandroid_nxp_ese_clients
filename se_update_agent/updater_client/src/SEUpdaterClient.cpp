@@ -392,14 +392,15 @@ static bool HasMatchingSignature(
     const std::vector<std::pair<std::vector<uint8_t>, std::streampos>>&
         auth_frames_in_script,
     std::streampos* script_start_offset) {
-  for (int auth_frame_cnt = 0; auth_frames_in_script.size(); auth_frame_cnt++) {
-    if (interrupted_auth_frame == auth_frames_in_script[auth_frame_cnt].first) {
-      *script_start_offset = auth_frames_in_script[auth_frame_cnt].second;
-      ALOGD("Interrupted Script auth frame found at count: %d with offset %lld",
-            auth_frame_cnt, static_cast<long long>(*script_start_offset));
+  for (const auto& auth_frame : auth_frames_in_script) {
+    if (interrupted_auth_frame == auth_frame.first) {
+      *script_start_offset = auth_frame.second;
+      ALOGD("Interrupted Script auth frame found at offset %lld",
+            static_cast<long long>(*script_start_offset));
       return true;
     }
   }
+
   return false;
 }
 
