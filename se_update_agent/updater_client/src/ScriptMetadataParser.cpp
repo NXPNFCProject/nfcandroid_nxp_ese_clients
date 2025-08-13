@@ -627,6 +627,16 @@ int ParseSemsMetadata(const char* path) {
     LOG(ERROR) << "Error: Could not open file: " << path << "  errno " << errno;
     return 1;
   }
+  if (!file.good()) {
+    LOG(WARNING) << "rdstate:" << file.rdstate();
+    file.clear();
+    if (!file.good()) {
+      LOG(ERROR) << "file stream " << path
+                 << " is corrupted. rdstate:" << file.rdstate();
+      file.close();
+      return 1;
+    }
+  }
   LOG(DEBUG) << "ParseSemsMetadata: " << path;
   std::vector<std::pair<std::string, std::pair<std::string, std::streampos>>>
       metadata;
@@ -643,6 +653,7 @@ int ParseSemsMetadata(const char* path) {
     line_start_offset = file.tellg();
     if (line_start_offset == -1) {
       LOG(ERROR) << "Failed to read current position in file. errno: " << errno;
+      file.close();
       return 1;
     }
     // Read the file line by line
