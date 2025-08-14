@@ -17,6 +17,7 @@
  ******************************************************************************/
 
 #include "ScriptMetadataParser.h"
+#include <Utils.h>
 
 #include <android-base/logging.h>
 #include <dirent.h>
@@ -137,17 +138,6 @@ int SSCANF_BYTE(const char* buf, const char* format, void* pVal) {
     (*pTmp) = (unsigned char)(dwVal & 0x000000FF);
   }
   return Result;
-}
-
-std::string toString(const std::vector<uint8_t>& vec) {
-  std::ostringstream os;
-  os << "{";
-  for (auto& c : vec) {
-    os << std::hex << std::setfill('0') << std::uppercase << std::setw(2)
-       << (0xFF & c);
-  }
-  os << "}";
-  return os.str();
 }
 
 // Function to trim leading and trailing whitespace

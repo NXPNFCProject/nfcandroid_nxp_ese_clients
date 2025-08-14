@@ -36,6 +36,7 @@ filegroup {
          "updater_client/src/ScriptMetadataParser.cpp",
          "updater_client/src/HalToHalTransport.cpp",
          "updater_client/src/OmapiTransport.cpp",
+         "updater_client/src/Utils.cpp",
     ],
 }
 

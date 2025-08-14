@@ -57,9 +57,8 @@ struct GetStatusScriptMetaInfo {
 // Minimum memory requirements for installing a secure element applet.
 // All values are in bytes.
 struct AppletMemoryRequirements {
-  uint32_t min_volatile_memory_bytes;  // RAM needed during installation
-  uint32_t
-      min_non_volatile_memory_bytes;  // Flash/EEPROM for persistent storage
+  uint32_t min_volatile_memory_bytes;
+  uint32_t min_non_volatile_memory_bytes;
 };
 
 struct LoadUpdateScriptMetaInfo {
@@ -139,10 +138,5 @@ void SetScriptExecutionState(ExecutionState script_exe_state);
  * Prints version from eSE and from update pkg(scripts) in tabular format
  */
 void PrintVersionTable();
-
-/**
- * Utility function to print vector contents
- */
-std::string toString(const std::vector<uint8_t>& vec);
 
 #endif
