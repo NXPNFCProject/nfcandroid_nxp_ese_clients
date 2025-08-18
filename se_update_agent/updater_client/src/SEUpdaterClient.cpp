@@ -324,17 +324,25 @@ static SESTATUS GetInterruptedScriptPath(std::string& interrupted_script_path,
 }
 static SESTATUS ParseSemsScriptsMetadataInternal(
     const std::string& script_dir_path, bool clear_version_table = true) {
-  auto status = ParseSemsScriptsMetadata(script_dir_path, clear_version_table);
-  if (status == SESTATUS_OK) {
-    status = InitializeConnection();
-    if (status == SESTATUS_OK) {
-      std::vector<uint8_t> atr;
-      SEConnection::getInstance().getAtr(atr);
-      std::vector<uint8_t> chip_type(atr.begin(), atr.begin() + 5);
-      FilterScriptsForChiptype(chip_type);
-    }
+  ParseMetadataError result =
+      ParseSemsScriptsMetadata(script_dir_path, clear_version_table);
+  if (result != ParseMetadataError::SUCCESS) {
+    return SESTATUS_SCRIPT_PARSE_FAILURE;
   }
-  return status;
+  if (InitializeConnection() != SESTATUS_OK) {
+    return SESTATUS_FAILED;
+  }
+
+  std::vector<uint8_t> atr;
+  SEConnection::getInstance().getAtr(atr);
+  std::vector<uint8_t> chip_type(atr.begin(), atr.begin() + 5);
+
+  result = FilterScriptsForChiptype(chip_type);
+  if (result != ParseMetadataError::SUCCESS) {
+    return SESTATUS_SCRIPT_PARSE_FAILURE;
+  }
+
+  return SESTATUS_OK;
 }
 // check and resume interrupted script execution
 
@@ -383,8 +391,9 @@ SESTATUS CheckAppletUpdateRequired(bool* load_req, bool* update_req) {
 SESTATUS PrepareUpdate(const std::string& script_dir_path, bool retry_load) {
   current_transport = TransportType::HAL_TO_OMAPI;
 
-  if (SESTATUS_FILE_NOT_FOUND ==
+  if (SESTATUS_SCRIPT_PARSE_FAILURE ==
       ResumeInterruptedScript(script_dir_path, ExecutionState::LOAD)) {
+    // no retry for parsing failure
     return SESTATUS_OK;
   }
 

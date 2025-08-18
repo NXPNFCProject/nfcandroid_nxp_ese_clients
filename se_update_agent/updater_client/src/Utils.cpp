@@ -65,9 +65,9 @@ bool parseMemoryResponse(const std::vector<uint8_t>& ese_mem_data_all,
   auto end = ese_mem_data_all.cend() - 2;  // ignore status word
 
   it += 2;  // Skip first two bytes (e.g., header)
-  uint16_t tag = (*it++ << 8) | *it++;
-  if (tag != AVL_MEMORY_TAG) {
-    LOG(ERROR) << "Invalid tag: " << std::hex << std::uppercase << tag
+  uint16_t mem_tag = (*it++ << 8) | *it++;
+  if (mem_tag != AVL_MEMORY_TAG) {
+    LOG(ERROR) << "Invalid tag: " << std::hex << std::uppercase << mem_tag
                << ", expected 0x" << AVL_MEMORY_TAG;
     return false;
   }
@@ -134,8 +134,7 @@ std::vector<uint8_t> getAvailableMemoryFromSE() {
       } else {
         LOG(ERROR) << "Failed to send GetAvailableMemory C-APDU";
       }
-      status =
-          SEConnection::getInstance().transport_->closeChannel(channel_num);
+      SEConnection::getInstance().transport_->closeChannel(channel_num);
     } else {
       LOG(ERROR) << "Failed to open Channel to to cardManager";
     }
@@ -166,6 +165,85 @@ bool hasSufficientESEMemoryForScript(
     }
   }
   return result;
+}
+
+static uint32_t parseForJCOPBaseVersion(
+    const std::vector<uint8_t>& platform_id_resp) {
+  //  GET Platform Identifier R-APDU for CLA 0x80
+  //  Data                                                   SW
+  //  FE Length (DF 20) Length <16-byte Platform identifier> 0x9000
+  // The Platform Identifiers of JCOP products are 16 bytes long and have the
+  // following form: Nabcccxxxxxxyyzz xxxxxx represents JCOP build number in
+  // hexadecimal notation
+  if (platform_id_resp.size() < GET_PLATFORM_IDENTIFIER_RSP_SIZE) {
+    LOG(ERROR) << "parseForJCOPBaseVersion: Response too short";
+    return 0;
+  }
+  if (platform_id_resp[platform_id_resp.size() - 2] != 0x90 ||
+      platform_id_resp[platform_id_resp.size() - 1] != 0x00) {
+    LOG(ERROR) << "parseForJCOPBaseVersion: Invalid status word, expected "
+                  "0x9000, got 0x"
+               << std::hex << std::uppercase
+               << (platform_id_resp[platform_id_resp.size() - 2] << 8 |
+                   platform_id_resp[platform_id_resp.size() - 1]);
+    return 0;
+  }
+  if ((platform_id_resp[2] << 8 | platform_id_resp[3]) != 0xDF20) {
+    LOG(ERROR) << "parseForJCOPBaseVersion:: Invalid tag found, expected "
+                  "0xDF20, got 0x"
+               << std::hex << std::uppercase
+               << (platform_id_resp[2] << 8 | platform_id_resp[3]);
+    return 0;
+  }
+  std::vector<uint8_t> platform_id;  // 16 byte
+  platform_id.assign(platform_id_resp.begin() + 5,
+                     platform_id_resp.begin() + 21);
+
+  // extract 6 bytes JCOP rev number from platform_id
+  std::vector<uint8_t> jcopRevNum;
+  jcopRevNum.assign(platform_id.begin() + 6, platform_id.begin() + 12);
+  // Convert to hex string
+  std::string ascii_jcopRevNum;
+  for (auto& item : jcopRevNum) {
+    ascii_jcopRevNum += static_cast<char>(item);
+  }
+  // Convert ASCII string (hex representation) to decimal
+  // jcopRevNum is guaranteed to have valid hex characters
+  uint32_t decimal = std::stoul(ascii_jcopRevNum, nullptr, 16);
+
+  return decimal;
+}
+
+uint32_t getSEOsVersion() {
+  static uint32_t jcop_base_rev_number = 0;
+  static bool jcop_version_cached = false;
+
+  if (!jcop_version_cached && InitializeConnection() == SESTATUS_OK) {
+    std::vector<uint8_t> select_resp, platform_id_resp;
+    int8_t channel_num = -1;
+    SEConnection::getInstance().transport_->openChannel(
+        card_manager_aid, channel_num, select_resp);
+
+    if (channel_num != -1) {
+      // JCOP Platform Identifier C-APDU
+      std::vector<uint8_t> get_platform_id_cmd = {0x80, 0xCA, 0x00, 0xFE,
+                                                  0x02, 0xDF, 0x20};
+      get_platform_id_cmd[0] |= channel_num;
+
+      auto status = SEConnection::getInstance().transport_->sendData(
+          get_platform_id_cmd, platform_id_resp);
+      if (status) {
+        jcop_base_rev_number = parseForJCOPBaseVersion(platform_id_resp);
+        if (jcop_base_rev_number != 0) {
+          jcop_version_cached = true;
+        }
+      } else {
+        LOG(ERROR) << "Failed to send Get JCOP revision C-APDU";
+      }
+      SEConnection::getInstance().transport_->closeChannel(channel_num);
+    }
+  }
+  return jcop_base_rev_number;
 }
 
 // Helper function to convert byte array to string

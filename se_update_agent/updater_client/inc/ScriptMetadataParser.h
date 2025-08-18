@@ -23,10 +23,25 @@
 #include <string>
 #include <vector>
 
-enum SemsScriptType { UPDATE_SCRIPT, LOAD_SCRIPT, GET_STATUS_SCRIPT };
-enum PlatformID { SN220_V3, SN220_V5, SN300, SN330, SN470, INVALID };
+enum SemsScriptType {
+  UPDATE_SCRIPT,
+  LOAD_SCRIPT,
+  GET_STATUS_SCRIPT,
+  INVALID_SCRIPT
+};
 enum ExecutionState { GET_STATUS, LOAD, UPDATE };
 enum GetStatusResponseType { INSTANCE_DATA, MATCHING_ELF_DATA };
+
+enum ParseMetadataError {
+  SUCCESS = 0,  // Parsing succeeded
+  FILE_IO_ERROR, // Error reading from file
+  FILE_NOT_FOUND,  // Script not found
+  INVALID_SEMS_TYPE, // Unknown SemsScriptType type
+  MISSING_METADATA,          // No metadata in the script
+  MISSING_METADATA_FIELD,    // Missing metadata field
+  DUPLICATE_METADATA_FIELD,  // Duplicate metadata field
+  INVALID_HEX_FIELD  // Invalid hex string in AppletAID, ELFAID, or ELFVersion
+};
 
 struct MatchingELF {
   std::vector<uint8_t> elf_aid_complete;
@@ -87,7 +102,7 @@ struct SemsScriptInfo {
 /**
  * local method to parse sems metadata per script
  */
-int ParseSemsMetadata(const char* path);
+ParseMetadataError ParseSemsMetadata(const char* path);
 
 /**
  * Prints parsed info for all scripts
@@ -108,13 +123,13 @@ const std::vector<struct SemsScriptInfo> GetEnumeratedScriptsData();
  * Parses metadata field for all scripts available under
  * dir script_dir_path
  */
-SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path,
-                                  bool clear_version_table = true);
+ParseMetadataError ParseSemsScriptsMetadata(std::string script_dir_path,
+                                            bool clear_version_table = true);
 
 /**
  * Filter parsed metadata files applicable for current chiptype
  */
-void FilterScriptsForChiptype(std::vector<uint8_t>& chip_type);
+ParseMetadataError FilterScriptsForChiptype(std::vector<uint8_t>& chip_type);
 
 /**
  * Parses response received during GETSTATUS script execution
@@ -135,7 +150,7 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req);
 void SetScriptExecutionState(ExecutionState script_exe_state);
 
 /**
- * Prints version from eSE and from update pkg(scripts) in tabular format
+ * Prints version from eSE and update pkg(scripts) in tabular format
  */
 void PrintVersionTable();
 

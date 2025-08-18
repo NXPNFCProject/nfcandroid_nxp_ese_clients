@@ -52,12 +52,6 @@ ExecutionState exe_state;
 
 std::vector<std::string> rows;
 
-static std::vector<std::pair<std::vector<uint8_t>, PlatformID>> ChipIds = {
-    {{0x00, 0x00, 0x00, 0x00, 0x20}, PlatformID::SN220_V3},
-    {{0x00, 0x00, 0x00, 0x00, 0x21}, PlatformID::SN220_V5},
-    {{0x00, 0x00, 0x00, 0x00, 0x30}, PlatformID::SN300},
-};
-
 const std::vector<struct SemsScriptInfo> GetEnumeratedScriptsData() {
   return all_scripts_info;
 }
@@ -148,14 +142,14 @@ std::string trim(const std::string& str) {
   return str.substr(first, last - first + 1);
 }
 
-SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path,
-                                  bool clear_version_table) {
+ParseMetadataError ParseSemsScriptsMetadata(std::string script_dir_path,
+                                            bool clear_version_table) {
   std::string path = std::move(script_dir_path);
 
   DIR* dir = opendir(path.c_str());
   if (dir == nullptr) {
     LOG(ERROR) << "Error opening directory: " << path;
-    return SESTATUS_FILE_NOT_FOUND;
+    return ParseMetadataError::FILE_NOT_FOUND;
   }
 
   ResetGlobalMetadataState(clear_version_table);
@@ -169,21 +163,20 @@ SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path,
     if (name == "." || name == "..") continue;
     std::string fullPath = path + "/" + name;
     if (stat(fullPath.c_str(), &sb) == 0 && !(sb.st_mode & S_IFDIR)) {
-      if (ParseSemsMetadata(fullPath.c_str())) {
-        LOG(ERROR) << "Error parsing: " << path;
-        parse_success = false;
-        break;
+      ParseMetadataError result = ParseSemsMetadata(fullPath.c_str());
+      if (result != ParseMetadataError::SUCCESS) {
+        LOG(ERROR) << "Error" << result << " parsing: " << path;
+        closedir(dir);
+        return result;
       }
     }
   }
   if (dir != NULL) {
     closedir(dir);
   }
-  if (!parse_success || getstatus_script.script_path.empty()) {
-    LOG(ERROR)
-        << "Failed to parse script or getstatus script is not found under "
-        << path;
-    return SESTATUS_FILE_NOT_FOUND;
+  if (getstatus_script.script_path.empty()) {
+    LOG(ERROR) << "GETSTATUS SCRIPT not found under " << path;
+    return ParseMetadataError::FILE_NOT_FOUND;
   }
 
   for (int i = 0; i < getstatus_script.applet_aids_partial.size(); i++) {
@@ -211,10 +204,10 @@ SESTATUS ParseSemsScriptsMetadata(std::string script_dir_path,
       all_scripts_info.push_back(temp);
     }
   }
-  return SESTATUS_OK;
+  return ParseMetadataError::SUCCESS;
 }
 
-void FilterScriptsForChiptype(std::vector<uint8_t>& chip_type) {
+ParseMetadataError FilterScriptsForChiptype(std::vector<uint8_t>& chip_type) {
   // find corresponding platformID
   PlatformID p_id = PlatformID::INVALID;
   for (const auto& item : ChipIds) {
@@ -224,6 +217,12 @@ void FilterScriptsForChiptype(std::vector<uint8_t>& chip_type) {
     }
   }
 
+  if (p_id == PlatformID::SN220_V5 &&
+      getSEOsVersion() == SN220_V3_JCOP_BASE_REV_NUM) {
+    // SN220_V3 vendor ID was updated to 0x0000000021 with JCOP Update REV num
+    // 0x03D043
+    p_id = PlatformID::SN220_V3;
+  }
   LOG(INFO) << "Platform/ChipID is: " << p_id;
   std::vector<struct SemsScriptInfo> temp_all_scripts_info;
 
@@ -232,13 +231,16 @@ void FilterScriptsForChiptype(std::vector<uint8_t>& chip_type) {
     switch (p_id) {
       case PlatformID::SN220_V3: {
         if (script.load_script_exists) {
-          LOG(INFO)
+          // AMD-H based Update is not supported for SN220_V3
+          LOG(WARNING)
               << "LOAD_SCRIPT Type is not supported for chiptype:SN220_V3";
           script_invalid = true;
-        } else if (script.update_script_exists &&
-                   script.update_script.platform_id != PlatformID::SN220_V3) {
-          LOG(INFO) << "Script is invalid for chiptype:SN220_V3";
-          script_invalid = true;
+          return ParseMetadataError::INVALID_SEMS_TYPE;
+        } else {
+          script_invalid |=
+              script.update_script_exists
+                  ? (script.update_script.platform_id != PlatformID::SN220_V3)
+                  : 0;
         }
       } break;
       case PlatformID::SN220_V5:
@@ -280,6 +282,7 @@ void FilterScriptsForChiptype(std::vector<uint8_t>& chip_type) {
   }
   all_scripts_info.clear();
   all_scripts_info = temp_all_scripts_info;
+  return ParseMetadataError::SUCCESS;
 }
 // Print enumerated data for each SEMS script
 void DisplayAllScriptsInfo() {
@@ -611,11 +614,11 @@ bool IsDuplicateEntry(std::set<std::string>& metafields,
   }
 }
 
-int ParseSemsMetadata(const char* path) {
+ParseMetadataError ParseSemsMetadata(const char* path) {
   std::ifstream file(path);
   if (!file.is_open()) {
-    LOG(ERROR) << "Error: Could not open file: " << path << "  errno " << errno;
-    return 1;
+    LOG(ERROR) << "Failed to open file: " << path << "  errno " << errno;
+    return ParseMetadataError::FILE_IO_ERROR;
   }
   if (!file.good()) {
     LOG(WARNING) << "rdstate:" << file.rdstate();
@@ -624,7 +627,7 @@ int ParseSemsMetadata(const char* path) {
       LOG(ERROR) << "file stream " << path
                  << " is corrupted. rdstate:" << file.rdstate();
       file.close();
-      return 1;
+      return ParseMetadataError::FILE_IO_ERROR;
     }
   }
   LOG(DEBUG) << "ParseSemsMetadata: " << path;
@@ -644,7 +647,7 @@ int ParseSemsMetadata(const char* path) {
     if (line_start_offset == -1) {
       LOG(ERROR) << "Failed to read current position in file. errno: " << errno;
       file.close();
-      return 1;
+      return ParseMetadataError::FILE_IO_ERROR;
     }
     // Read the file line by line
     if (!std::getline(file, line)) {
@@ -677,11 +680,10 @@ int ParseSemsMetadata(const char* path) {
   file.close();
 
   if (metadata.size() == 0) {
-    LOG(ERROR) << "No valid metadata present\n";
-    return 1;
+    return ParseMetadataError::MISSING_METADATA;
   }
 
-  SemsScriptType script_type = UPDATE_SCRIPT;
+  SemsScriptType script_type = INVALID_SCRIPT;
   if (!strncmp(metadata[0].first.c_str(), "SEMSType", strlen("SEMSType"))) {
     uint8_t current_byte;
     SSCANF_BYTE(metadata[0].second.first.c_str(), "%2X", &current_byte);
@@ -706,7 +708,7 @@ int ParseSemsMetadata(const char* path) {
         }
         load_update_script_temp.applet_aid_partial = partial_aid;
         if (IsDuplicateEntry(load_update_script_metafields, "AppletAID")) {
-          return 1;
+          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
         }
       }
       if (!metadata[i].first.compare(0, strlen("ELFAID"), "ELFAID")) {
@@ -719,7 +721,7 @@ int ParseSemsMetadata(const char* path) {
         }
         load_update_script_temp.elf_aid_complete = elf_aid;
         if (IsDuplicateEntry(load_update_script_metafields, "ELFAID")) {
-          return 1;
+          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
         }
       }
       if (!metadata[i].first.compare(0, strlen("ELFVersion"), "ELFVersion")) {
@@ -730,7 +732,7 @@ int ParseSemsMetadata(const char* path) {
           x = x + 2;
         }
         if (IsDuplicateEntry(load_update_script_metafields, "ELFVersion")) {
-          return 1;
+          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
         }
       }
       if (!metadata[i].first.compare(0, strlen("MinVolatileMemory"),
@@ -740,11 +742,12 @@ int ParseSemsMetadata(const char* path) {
               static_cast<uint32_t>(
                   std::stoul(metadata[i].second.first.c_str(), nullptr, 16));
         } catch (const std::invalid_argument& e) {
-          LOG(ERROR) << "Value is not a valid hex number\n";
+          LOG(ERROR) << "MinVolatileMemory: value is not a valid hex number";
+          return ParseMetadataError::INVALID_HEX_FIELD;
         }
         if (IsDuplicateEntry(load_update_script_metafields,
                              "MinVolatileMemory")) {
-          return 1;
+          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
         }
       }
       if (!metadata[i].first.compare(0, strlen("MinNonVolatileMemory"),
@@ -754,11 +757,12 @@ int ParseSemsMetadata(const char* path) {
               static_cast<uint32_t>(
                   std::stoul(metadata[i].second.first.c_str(), nullptr, 16));
         } catch (const std::invalid_argument& e) {
-          LOG(ERROR) << "Value is not a valid hex number\n";
+          LOG(ERROR) << "MinNonVolatileMemory: value is not a valid hex number";
+          return ParseMetadataError::INVALID_HEX_FIELD;
         }
         if (IsDuplicateEntry(load_update_script_metafields,
                              "MinNonVolatileMemory")) {
-          return 1;
+          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
         }
       }
       if (!metadata[i].first.compare(0, strlen("PlatformID"), "PlatformID")) {
@@ -766,14 +770,14 @@ int ParseSemsMetadata(const char* path) {
         SSCANF_BYTE(metadata[i].second.first.c_str(), "%2X", &read_buf);
         load_update_script_temp.platform_id = read_buf;
         if (IsDuplicateEntry(load_update_script_metafields, "PlatformID")) {
-          return 1;
+          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
         }
       }
       if (!metadata[i].first.compare(0, strlen("SEMSType"), "SEMSType")) {
         load_update_script_temp.script_type = script_type;
         load_update_script_temp.script_path = path;
         if (IsDuplicateEntry(load_update_script_metafields, "SEMSType")) {
-          return 1;
+          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
         }
       }
       if (!metadata[i].first.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
@@ -791,7 +795,7 @@ int ParseSemsMetadata(const char* path) {
         getstatus_script.script_type = script_type;
         getstatus_script.script_path = path;
         if (IsDuplicateEntry(getstatus_script_metafields, "SEMSType")) {
-          return 1;
+          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
         }
       }
       if (!metadata[i].first.compare(0, strlen("AppletAID"), "AppletAID")) {
@@ -804,7 +808,7 @@ int ParseSemsMetadata(const char* path) {
         }
         getstatus_script.applet_aids_partial.push_back(partial_aid);
         if (IsDuplicateEntry(getstatus_script_metafields, metadata[i].first)) {
-          return 1;
+          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
         }
       }
       if (!metadata[i].first.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
@@ -823,17 +827,17 @@ int ParseSemsMetadata(const char* path) {
     if (load_update_script_metafields.size() <
         MIN_METADATA_FIELDS_LOAD_UPDATE_SCRIPT) {
       LOG(ERROR) << "Missing metadata field for LOAD/UPDATE script";
-      return 1;
+      return ParseMetadataError::MISSING_METADATA_FIELD;
     }
     load_update_script.push_back(load_update_script_temp);
   } else if (script_type == SemsScriptType::GET_STATUS_SCRIPT) {
     if (getstatus_script_metafields.size() <
         MIN_METADATA_FIELDS_GETSTATUS_SCRIPT) {
       LOG(ERROR) << "Missing metadata field for GET_STATUS script";
-      return 1;
+      return ParseMetadataError::MISSING_METADATA_FIELD;
     }
   }
-  return 0;
+  return ParseMetadataError::SUCCESS;
 }
 
 void PrintAllParsedMetadata() {

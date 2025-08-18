@@ -23,6 +23,18 @@
 #include <iostream>
 #include <vector>
 
+#define GET_PLATFORM_IDENTIFIER_RSP_SIZE 23
+#define SN220_V3_JCOP_BASE_REV_NUM (0x03D043)
+
+enum PlatformID { SN220_V3, SN220_V5, SN300, SN330, SN470, INVALID };
+
+const static std::vector<std::pair<std::vector<uint8_t>, PlatformID>> ChipIds =
+    {
+        {{0x00, 0x00, 0x00, 0x00, 0x20}, PlatformID::SN220_V3},
+        {{0x00, 0x00, 0x00, 0x00, 0x21}, PlatformID::SN220_V5},
+        {{0x00, 0x00, 0x00, 0x00, 0x30}, PlatformID::SN300},
+};
+
 struct eSEAvailableMemory {
   uint32_t tag_00;  // available persistent memory [System]
   uint32_t tag_01;  // available transient clear-on-reset memory [System]
@@ -60,6 +72,11 @@ bool hasSufficientESEMemoryForScript(
  */
 bool parseMemoryResponse(const std::vector<uint8_t>& ese_mem_data_all,
                          struct eSEAvailableMemory& ese_memory_parsed);
+
+/**
+ * Get eSE OS version number
+ */
+uint32_t getSEOsVersion();
 
 /**
  * Utility function to print vector contents
