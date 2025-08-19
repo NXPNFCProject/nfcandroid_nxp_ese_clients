@@ -77,10 +77,12 @@ struct AppletMemoryRequirements {
 };
 
 struct LoadUpdateScriptMetaInfo {
-  SemsScriptType script_type;
-  std::vector<uint8_t> applet_aid_partial;
-  std::vector<uint8_t> elf_aid_complete;
-  std::vector<uint8_t> elf_version;
+  SemsScriptType script_type;               // current type
+  std::vector<uint8_t> applet_aid_partial;  // applet identifier
+  std::vector<uint8_t> elf_aid_complete;    // complete aid of target version
+  std::vector<uint8_t> elf_version;         // target version
+  std::vector<uint8_t>
+      elf_base_version;  // base version on which script is generated
   AppletMemoryRequirements mem_req;
   std::vector<std::pair<std::vector<uint8_t>, std::streampos>>
       signatures;  // multiple SEMS scripts embedded within one file
@@ -128,8 +130,9 @@ ParseMetadataError ParseSemsScriptsMetadata(std::string script_dir_path,
 
 /**
  * Filter parsed metadata files applicable for current chiptype
+ * and remove invalid scripts
  */
-ParseMetadataError FilterScriptsForChiptype(std::vector<uint8_t>& chip_type);
+ParseMetadataError FilterScripts(std::vector<uint8_t>& chip_type);
 
 /**
  * Parses response received during GETSTATUS script execution

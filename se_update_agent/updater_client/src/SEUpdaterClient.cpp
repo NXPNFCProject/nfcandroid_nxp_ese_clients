@@ -340,7 +340,7 @@ static SESTATUS ParseSemsScriptsMetadataInternal(
   SEConnection::getInstance().getAtr(atr);
   std::vector<uint8_t> chip_type(atr.begin(), atr.begin() + 5);
 
-  result = FilterScriptsForChiptype(chip_type);
+  result = FilterScripts(chip_type);
   if (result != ParseMetadataError::SUCCESS) {
     return SESTATUS_SCRIPT_PARSE_FAILURE;
   }

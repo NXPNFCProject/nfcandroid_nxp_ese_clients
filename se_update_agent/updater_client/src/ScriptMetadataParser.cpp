@@ -45,12 +45,12 @@ const std::vector<std::string> MANDATORY_METADATA_FIELDS_GETSTATUS_SCRIPT = {
 #define OTHER_COL_WIDTH 20
 
 void PrintAllParsedMetadata();
-std::vector<struct LoadUpdateScriptMetaInfo> load_update_script;
-std::vector<struct SemsScriptInfo> all_scripts_info;
+static std::vector<struct LoadUpdateScriptMetaInfo> load_update_script;
+static std::vector<struct SemsScriptInfo> all_scripts_info;
 struct GetStatusScriptMetaInfo getstatus_script;
-std::vector<struct GetStatusResponse> getstatus_response;
+static std::vector<struct GetStatusResponse> getstatus_response;
 
-ExecutionState exe_state;
+static ExecutionState exe_state;
 
 std::vector<std::string> rows;
 
@@ -136,6 +136,218 @@ inline int SSCANF_BYTE(const char* buf, const char* format, void* pVal) {
   return Result;
 }
 
+// Function to sort vector of LoadUpdateScriptMetaInfo by elf_version
+// (descending) and elf_base_version (descending)
+void sortScriptsByVersion(std::vector<LoadUpdateScriptMetaInfo>& scripts) {
+  std::sort(
+      scripts.begin(), scripts.end(),
+      [](const LoadUpdateScriptMetaInfo& a, const LoadUpdateScriptMetaInfo& b) {
+        // Compare elf_version first (higher version comes first)
+        if (a.elf_version != b.elf_version) {
+          return a.elf_version > b.elf_version;
+        }
+        // If elf_version is equal, compare elf_base_version (descending)
+        return a.elf_base_version > b.elf_base_version;
+      });
+}
+
+// Helper function to compare two version vectors (e.g., ELFVersion)
+bool isVersionGreater(const std::vector<uint8_t>& v1,
+                      const std::vector<uint8_t>& v2) {
+  if (v1.size() != v2.size()) return v1.size() > v2.size();
+  return v1 > v2;
+}
+
+// Function to filter scripts based on conditions
+std::vector<LoadUpdateScriptMetaInfo> filterScripts(
+    const std::vector<LoadUpdateScriptMetaInfo>& scripts,
+    SemsScriptType script_type, const std::vector<uint8_t>& applet_aid) {
+  std::vector<LoadUpdateScriptMetaInfo> filtered_scripts;
+  // Filter scripts by script_type and AppletAID
+  std::vector<LoadUpdateScriptMetaInfo> matching_scripts;
+  for (const auto& script : scripts) {
+    if (script.script_type == script_type &&
+        script.applet_aid_partial == applet_aid) {
+      matching_scripts.push_back(script);
+    }
+  }
+
+  if (matching_scripts.empty()) {
+    LOG(WARNING) << "No script with script_type:" << script_type
+                 << " found for applet_aid: " << toString(applet_aid);
+    return {};
+  }
+
+  // Count scripts with ELFBaseVersion and without ELFBaseVersion
+  std::vector<LoadUpdateScriptMetaInfo> scripts_with_base;
+  std::vector<LoadUpdateScriptMetaInfo> scripts_without_base;
+  for (const auto& script : matching_scripts) {
+    if (script.elf_base_version.empty()) {
+      scripts_without_base.push_back(script);
+    } else {
+      scripts_with_base.push_back(script);
+    }
+  }
+
+  // Case: Single script with no ELFBaseVersion, select it
+  if (scripts_with_base.empty() && scripts_without_base.size() == 1) {
+    filtered_scripts.push_back(scripts_without_base[0]);
+    return filtered_scripts;
+  }
+
+  // Case: Multiple scripts with no ELFBaseVersion, reject
+  if (scripts_with_base.empty() && scripts_without_base.size() > 1) {
+    LOG(ERROR) << "Multiple scripts with no ELFBaseVersion detected for AID: "
+               << toString(applet_aid);
+    throw std::runtime_error("Duplicate script files with no ELFBaseVersion");
+  }
+
+  // Case: Handle scripts with matching ELFBaseVersion
+  if (!scripts_with_base.empty()) {
+    // Group scripts by ELFBaseVersion
+    std::unordered_map<std::string, std::vector<LoadUpdateScriptMetaInfo>>
+        base_version_groups;
+    for (const auto& script : scripts_with_base) {
+      std::string base_version_str(script.elf_base_version.begin(),
+                                   script.elf_base_version.end());
+      base_version_groups[base_version_str].push_back(script);
+    }
+
+    // Process each ELFBaseVersion group
+    for (const auto& base_group : base_version_groups) {
+      // Check for duplicate ELFVersion within this ELFBaseVersion group
+      std::unordered_map<std::string, std::vector<LoadUpdateScriptMetaInfo>>
+          version_groups;
+      for (const auto& script : base_group.second) {
+        std::string version_str(script.elf_version.begin(),
+                                script.elf_version.end());
+        version_groups[version_str].push_back(script);
+      }
+
+      // Case: Check for duplicate scripts with same ELFBaseVersion and
+      // ELFVersion
+      for (const auto& version_group : version_groups) {
+        if (version_group.second.size() > 1) {
+          std::string base_version_str =
+              toString(version_group.second[0].elf_base_version);
+          std::string version_str =
+              toString(version_group.second[0].elf_version);
+          LOG(ERROR) << "Duplicate scripts with ELFBaseVersion "
+                     << base_version_str << " and ELFVersion= " << version_str
+                     << " for AID: " << toString(applet_aid);
+          throw std::runtime_error(
+              "Duplicate script files with same ELFBaseVersion and ELFVersion");
+        }
+      }
+      // Case: Select script with the highest ELFVersion
+      const LoadUpdateScriptMetaInfo* latest_script = nullptr;
+      for (const auto& version_group : version_groups) {
+        const auto& script = version_group.second[0];
+        if (!latest_script ||
+            isVersionGreater(script.elf_version, latest_script->elf_version)) {
+          latest_script = &script;
+        }
+      }
+      filtered_scripts.push_back(*latest_script);
+    }
+  }
+
+  return filtered_scripts;
+}
+
+// Filters both LOAD(if available) and UPDATE type of
+// scripts for each applet. Checks for their compatibility
+// and prepares SemsScriptInfo for given applet aid.
+std::vector<SemsScriptInfo> filterScriptsForAid(
+    const std::vector<LoadUpdateScriptMetaInfo>& scripts,
+    const std::vector<uint8_t>& applet_aid) {
+  std::vector<LoadUpdateScriptMetaInfo> selected_update_scripts,
+      selected_load_scripts;
+  std::vector<SemsScriptInfo> filtered_scripts;
+
+  try {
+    selected_update_scripts = filterScripts(scripts, UPDATE_SCRIPT, applet_aid);
+    for (auto& item : selected_update_scripts) {
+      LOG(DEBUG) << item.script_path << " " << toString(item.elf_version) << " "
+                 << toString(item.elf_base_version) << std::endl;
+    }
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Exception while filtering for UPDATE_SCRIPT: " << e.what();
+    // Reaching here means there is no valid update/load scripts for this
+    // applet_aid
+    return {};
+  }
+
+  try {
+    selected_load_scripts = filterScripts(scripts, LOAD_SCRIPT, applet_aid);
+    for (auto& item : selected_load_scripts) {
+      LOG(DEBUG) << item.script_path << " " << toString(item.elf_version) << " "
+                 << toString(item.elf_base_version);
+    }
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Exception while filtering for LOAD_SCRIPT: " << e.what();
+    // Reaching here means provided load scripts for this applet_aid are not
+    // valid
+    return {};
+  }
+
+  // For AMD-H based upgrade: Both load and update type scripts are required
+  bool amdH_upgrade_compatible = false;
+
+  // For Non AMD-H based upgrade: only update type scripts are required
+  bool non_amdH_upgrade_only = false;
+
+  if (selected_load_scripts.size() > 0) {
+    sortScriptsByVersion(selected_load_scripts);
+    sortScriptsByVersion(selected_update_scripts);
+
+    // load and update scripts metadata(except script_type field) should match
+    amdH_upgrade_compatible = true;
+
+    if (selected_update_scripts.size() != selected_load_scripts.size()) {
+      LOG(ERROR) << "Error: load and update scripts size doesnot match";
+      amdH_upgrade_compatible = false;
+    } else {
+      for (int i = 0; i < selected_update_scripts.size(); i++) {
+        if ((selected_update_scripts[i].elf_version !=
+             selected_load_scripts[i].elf_version) ||
+            selected_update_scripts[i].elf_base_version !=
+                selected_load_scripts[i].elf_base_version) {
+          LOG(ERROR) << "Error: load and update script values don't match";
+          amdH_upgrade_compatible = false;
+          break;
+        }
+      }
+    }
+  } else {
+    // No Load script for this AppletAID.
+    // Consider this Non-AMDH based upgrade
+    non_amdH_upgrade_only = true;
+  }
+
+  if ((non_amdH_upgrade_only || amdH_upgrade_compatible)) {
+    struct LoadUpdateScriptMetaInfo empty = {};
+    empty.script_type = INVALID_SCRIPT;
+    for (int i = 0; i < selected_update_scripts.size(); i++) {
+      struct SemsScriptInfo entry = {};
+      entry.applet_aid_partial = selected_update_scripts[i].applet_aid_partial;
+      entry.load_script_exists =
+          (!non_amdH_upgrade_only && amdH_upgrade_compatible);
+      entry.update_script_exists =
+          (non_amdH_upgrade_only || amdH_upgrade_compatible);
+      entry.update_script = (non_amdH_upgrade_only || amdH_upgrade_compatible)
+                                ? selected_update_scripts[i]
+                                : empty;
+      entry.load_script = (!non_amdH_upgrade_only && amdH_upgrade_compatible)
+                              ? selected_load_scripts[i]
+                              : empty;
+      filtered_scripts.push_back(entry);
+    }
+  }
+
+  return filtered_scripts;
+}
+
 // Function to trim leading and trailing whitespace
 std::string trim(const std::string& str) {
   size_t first = str.find_first_not_of(' ');
@@ -144,6 +356,7 @@ std::string trim(const std::string& str) {
   return str.substr(first, last - first + 1);
 }
 
+// Parses metadata fields for all scripts available under given path
 ParseMetadataError ParseSemsScriptsMetadata(std::string script_dir_path,
                                             bool clear_version_table) {
   std::string path = std::move(script_dir_path);
@@ -180,36 +393,13 @@ ParseMetadataError ParseSemsScriptsMetadata(std::string script_dir_path,
     LOG(ERROR) << "GETSTATUS SCRIPT not found under " << path;
     return ParseMetadataError::FILE_NOT_FOUND;
   }
-
-  for (int i = 0; i < getstatus_script.applet_aids_partial.size(); i++) {
-    std::vector<uint8_t> partial_aid = getstatus_script.applet_aids_partial[i];
-    LOG(DEBUG) << "partial_aid: " << toString(partial_aid);
-
-    struct SemsScriptInfo temp;
-    memset(&temp, 0, sizeof(struct SemsScriptInfo));
-    temp.applet_aid_partial = partial_aid;
-    for (int x = 0; x < load_update_script.size(); x++) {
-      if (temp.applet_aid_partial == load_update_script[x].applet_aid_partial) {
-        if (load_update_script[x].script_type == SemsScriptType::LOAD_SCRIPT) {
-          temp.load_script = load_update_script[x];
-          temp.load_script_exists = true;
-          LOG(DEBUG) << "load script exists";
-        } else if (load_update_script[x].script_type ==
-                   SemsScriptType::UPDATE_SCRIPT) {
-          temp.update_script = load_update_script[x];
-          temp.update_script_exists = true;
-          LOG(DEBUG) << "update script exists";
-        }
-      }
-    }
-    if (temp.update_script_exists) {
-      all_scripts_info.push_back(temp);
-    }
-  }
   return ParseMetadataError::SUCCESS;
 }
 
-ParseMetadataError FilterScriptsForChiptype(std::vector<uint8_t>& chip_type) {
+// Filters all script based on
+// 1. chip type
+// 2. compatible/valid script based on target and base version for each applet
+ParseMetadataError FilterScripts(std::vector<uint8_t>& chip_type) {
   // find corresponding platformID
   PlatformID p_id = PlatformID::INVALID;
   for (const auto& item : ChipIds) {
@@ -225,51 +415,46 @@ ParseMetadataError FilterScriptsForChiptype(std::vector<uint8_t>& chip_type) {
     // 0x03D043
     p_id = PlatformID::SN220_V3;
   }
-  LOG(INFO) << "Platform/ChipID is: " << p_id;
-  std::vector<struct SemsScriptInfo> temp_all_scripts_info;
 
-  for (auto& script : all_scripts_info) {
+  std::vector<struct LoadUpdateScriptMetaInfo> scripts_filtered_for_chiptype;
+
+  for (const auto& script : load_update_script) {
     bool script_invalid = false;
     switch (p_id) {
       case PlatformID::SN220_V3: {
-        if (script.load_script_exists) {
+        if (script.script_type == SemsScriptType::LOAD_SCRIPT) {
           // AMD-H based Update is not supported for SN220_V3
           LOG(WARNING)
               << "LOAD_SCRIPT Type is not supported for chiptype:SN220_V3";
           script_invalid = true;
           return ParseMetadataError::INVALID_SEMS_TYPE;
         } else {
-          script_invalid |=
-              script.update_script_exists
-                  ? (script.update_script.platform_id != PlatformID::SN220_V3)
-                  : 0;
+          script_invalid |= script.script_type == SemsScriptType::UPDATE_SCRIPT
+                                ? (script.platform_id != PlatformID::SN220_V3)
+                                : 0;
         }
       } break;
       case PlatformID::SN220_V5:
-        script_invalid =
-            script.load_script_exists
-                ? (script.load_script.platform_id != PlatformID::SN220_V5)
-                : 0;
-        script_invalid |=
-            script.update_script_exists
-                ? (script.update_script.platform_id != PlatformID::SN220_V5)
-                : 0;
+        script_invalid = script.script_type == SemsScriptType::LOAD_SCRIPT
+                             ? (script.platform_id != PlatformID::SN220_V5)
+                             : 0;
+        script_invalid |= script.script_type == SemsScriptType::UPDATE_SCRIPT
+                              ? (script.platform_id != PlatformID::SN220_V5)
+                              : 0;
         if (script_invalid) {
           LOG(INFO) << "Script is invalid for chiptype:SN220_V5";
         }
         break;
       case PlatformID::SN300:
       case PlatformID::SN330:
-        script_invalid =
-            script.load_script_exists
-                ? (script.load_script.platform_id != PlatformID::SN300 &&
-                   script.load_script.platform_id != PlatformID::SN330)
-                : 0;
-        script_invalid |=
-            script.update_script_exists
-                ? (script.update_script.platform_id != PlatformID::SN300 &&
-                   script.update_script.platform_id != PlatformID::SN330)
-                : 0;
+        script_invalid = script.script_type == SemsScriptType::LOAD_SCRIPT
+                             ? (script.platform_id != PlatformID::SN300 &&
+                                script.platform_id != PlatformID::SN330)
+                             : 0;
+        script_invalid |= script.script_type == SemsScriptType::UPDATE_SCRIPT
+                              ? (script.platform_id != PlatformID::SN300 &&
+                                 script.platform_id != PlatformID::SN330)
+                              : 0;
         if (script_invalid) {
           LOG(INFO) << "Script is invalid for chiptype:SN300/SN330";
         }
@@ -279,11 +464,20 @@ ParseMetadataError FilterScriptsForChiptype(std::vector<uint8_t>& chip_type) {
         break;
     }
     if (!script_invalid) {
-      temp_all_scripts_info.push_back(script);
+      scripts_filtered_for_chiptype.push_back(script);
     }
   }
-  all_scripts_info.clear();
-  all_scripts_info = temp_all_scripts_info;
+
+  // Remove invalid scripts for each Applet AID
+  std::vector<struct SemsScriptInfo> valid_scripts;
+  auto getstatus_script_data = GetStatusScriptData();
+  for (const auto& applet_aid : getstatus_script_data.applet_aids_partial) {
+    auto filtered_scripts_for_aid =
+        filterScriptsForAid(scripts_filtered_for_chiptype, applet_aid);
+    valid_scripts.insert(valid_scripts.end(), filtered_scripts_for_aid.begin(),
+                         filtered_scripts_for_aid.end());
+  }
+  all_scripts_info = valid_scripts;
   return ParseMetadataError::SUCCESS;
 }
 
@@ -332,11 +526,19 @@ void PrintVersionTable() {
   LOG(INFO) << "\n" << table.str();
 }
 
+// Function to determine which script needs to be executed for Applet update
+
+// Iterates over each SemsScriptInfo, compares its target and base version info
+// with GetStatus script response to determine if script execution is needed.
+
 void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
   for (int i = 0; i < all_scripts_info.size(); i++) {
     auto load_script_elf_aid = all_scripts_info[i].load_script.elf_aid_complete;
     auto load_script_elf_ver = all_scripts_info[i].load_script.elf_version;
     auto update_script_elf_ver = all_scripts_info[i].update_script.elf_version;
+    auto update_script_elf_base_ver =
+        all_scripts_info[i].update_script.elf_base_version;
+
     bool load_required = false;
     bool update_required = false;
     bool applet_exists = false;
@@ -350,7 +552,42 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
         break;
       }
     }
-    if (all_scripts_info[i].load_script_exists) {
+
+    std::vector<uint8_t> installed_elf_version;
+    // check if UPDATE script is required
+    // Assuming existing installed_elf_aid is different
+    // from the ELF AID we are updating to
+    if (applet_exists) {
+      auto installed_elf_aid = getstatus_response[k].associated_elf_aid;
+      for (auto matching_elf : getstatus_response[k].matching_elfs) {
+        if (installed_elf_aid == matching_elf.elf_aid_complete) {
+          LOG(INFO) << "Installed elf aid" << toString(installed_elf_aid);
+          LOG(INFO) << "script_elf_ver:" << toString(update_script_elf_ver);
+          LOG(INFO) << "script_elf_base_ver:"
+                    << toString(update_script_elf_base_ver);
+          LOG(INFO) << "Installed_elf_ver:"
+                    << toString(matching_elf.elf_version);
+          installed_elf_version = matching_elf.elf_version;
+
+          if (isVersionGreater(update_script_elf_ver, installed_elf_version)) {
+            if (update_script_elf_base_ver.empty() ||
+                update_script_elf_base_ver ==
+                    std::vector<uint8_t>{0x00, 0x00}) {
+              // Scripts without ELFBaseVersion metadata field
+              update_required = true;
+            } else if (update_script_elf_base_ver == installed_elf_version) {
+              update_required = true;
+            }
+            break;
+          }
+        }
+      }
+    } else {
+      LOG(DEBUG) << "applet does not exist";
+      update_required = true;
+    }
+
+    if (update_required && all_scripts_info[i].load_script_exists) {
       load_required = true;
       // check if ELF is already present
       // Assuming existing installed_elf_aid is different
@@ -364,33 +601,6 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
         }
       }
     }
-    std::vector<uint8_t> installed_elf_version;
-    // check if UPDATE script is required
-    // Assuming existing installed_elf_aid is different
-    // from the ELF AID we are updating to
-    if (applet_exists) {
-      auto installed_elf_aid = getstatus_response[k].associated_elf_aid;
-      for (auto matching_elf : getstatus_response[k].matching_elfs) {
-        if (installed_elf_aid == matching_elf.elf_aid_complete) {
-          LOG(INFO) << "Installed elf aid" << toString(installed_elf_aid);
-          LOG(INFO) << "script_elf_ver:" << toString(update_script_elf_ver);
-          LOG(INFO) << "Installed_elf_ver:"
-                    << toString(matching_elf.elf_version);
-          installed_elf_version = matching_elf.elf_version;
-          if (update_script_elf_ver.size() == 2) {
-            if (update_script_elf_ver[0] > matching_elf.elf_version[0] ||
-                (update_script_elf_ver[0] == matching_elf.elf_version[0] &&
-                 update_script_elf_ver[1] > matching_elf.elf_version[1])) {
-              update_required = true;
-              break;
-            }
-          }
-        }
-      }
-    } else {
-      LOG(DEBUG) << "applet does not exist";
-      update_required = true;
-    }
     if (update_required) {
       // if update_required is true for atleast one applet
       *update_req = true;
@@ -398,10 +608,6 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
     if (load_required) {
       *load_req = true;
     }
-    LOG(INFO) << "AppletAID: "
-              << toString(getstatus_response[k].applet_aid_partial);
-    LOG(INFO) << "Update Pkg Version: " << toString(update_script_elf_ver);
-    LOG(INFO) << "Installed Version: " << toString(installed_elf_version);
     all_scripts_info[i].update_required = update_required;
     all_scripts_info[i].pre_load_required = load_required;
 
@@ -755,7 +961,10 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
         load_update_script_temp.elf_version =
             hexStringtoBytes(metadata[i].second.first);
       }
-
+      if (key == "ELFBaseVersion") {
+        load_update_script_temp.elf_base_version =
+            hexStringtoBytes(metadata[i].second.first);
+      }
       if (key == "MinVolatileMemory") {
         try {
           load_update_script_temp.mem_req.min_volatile_memory_bytes =
