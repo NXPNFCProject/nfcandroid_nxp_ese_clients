@@ -36,8 +36,10 @@
 #include <utility>
 #include <vector>
 
-#define MIN_METADATA_FIELDS_LOAD_UPDATE_SCRIPT 5
-#define MIN_METADATA_FIELDS_GETSTATUS_SCRIPT 2
+const std::vector<std::string> MANDATORY_METADATA_FIELDS_LOAD_UPDATE_SCRIPT = {
+    "SEMSType", "AppletAID", "ELFAID", "ELFVersion", "PlatformID"};
+const std::vector<std::string> MANDATORY_METADATA_FIELDS_GETSTATUS_SCRIPT = {
+    "SEMSType", "AppletAID1"};
 
 #define FIRST_COL_WIDTH 40
 #define OTHER_COL_WIDTH 20
@@ -121,7 +123,7 @@ static uint8_t Numof_lengthbytes(uint8_t* read_buf, int32_t* pLen) {
   return len_byte;
 }
 
-int SSCANF_BYTE(const char* buf, const char* format, void* pVal) {
+inline int SSCANF_BYTE(const char* buf, const char* format, void* pVal) {
   int Result = 0;
 
   if ((NULL != buf) && (NULL != format) && (NULL != pVal)) {
@@ -284,6 +286,7 @@ ParseMetadataError FilterScriptsForChiptype(std::vector<uint8_t>& chip_type) {
   all_scripts_info = temp_all_scripts_info;
   return ParseMetadataError::SUCCESS;
 }
+
 // Print enumerated data for each SEMS script
 void DisplayAllScriptsInfo() {
   LOG(INFO) << "Printing All scripts info";
@@ -306,6 +309,7 @@ void DisplayAllScriptsInfo() {
       LOG(INFO) << "  UPDATE script does not exist";
   }
 }
+
 // Print version info from eSE and Update package for each applet
 void PrintVersionTable() {
   std::ostringstream table;
@@ -410,6 +414,8 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
     rows.push_back(row.str());
   }
 }
+
+// Local helper function to parse GetStatus script response
 void ParseResponseLocal(GetStatusResponseType resp_type,
                         struct GetStatusResponse& temp,
                         std::vector<uint8_t>& getstatus_resp_vec) {
@@ -504,6 +510,8 @@ void ParseResponseLocal(GetStatusResponseType resp_type,
     }
   }
 }
+
+// Process GetStatus script response
 bool ParseResponse(uint8_t* respBuffer, int32_t respBuffersize) {
   if (exe_state == ExecutionState::GET_STATUS) {
     bool response_processed = false;
@@ -558,6 +566,9 @@ bool ParseResponse(uint8_t* respBuffer, int32_t respBuffersize) {
   }
   return true;
 }
+
+// Set execution state to determine type of script currently
+// under execution
 void SetScriptExecutionState(ExecutionState script_exe_state) {
   if (exe_state == ExecutionState::GET_STATUS) {
     LOG(INFO) << "Reset getstatus_response";
@@ -566,7 +577,9 @@ void SetScriptExecutionState(ExecutionState script_exe_state) {
   exe_state = script_exe_state;
 }
 
-void ParseAuthFrameSignature(const std::string auth_frame_string,
+// Local helper function to parse Authentication frame signature
+// AuthFrame signature uniquely identifies a given sems script
+void ParseAuthFrameSignature(const std::string& auth_frame_string,
                              std::vector<uint8_t>& auth_frame_sign) {
   uint8_t read_byte;
   const uint16_t size_ePK_SP_ENC = 65;
@@ -579,8 +592,6 @@ void ParseAuthFrameSignature(const std::string auth_frame_string,
     auth_frame.push_back(read_byte);
     x = x + 2;
   }
-  LOG(DEBUG) << "auth frame size after trimming is:"
-             << auth_frame_string.size();
   LOG(DEBUG) << toString(auth_frame);
   // extract signature from auth frame
   int32_t pLen = 0;
@@ -603,17 +614,44 @@ void ParseAuthFrameSignature(const std::string auth_frame_string,
   }
 }
 
-bool IsDuplicateEntry(std::set<std::string>& metafields,
-                      std::string fieldtype) {
+// Checks and throws error for duplicate metadata entry
+bool IsDuplicateEntry(auto& metafields, std::string fieldtype) {
   if (metafields.find(fieldtype) == metafields.end()) {
-    metafields.insert(fieldtype);
+    metafields[fieldtype] = true;
     return false;
   } else {
-    LOG(ERROR) << "Duplicate entry " << fieldtype << " encountered";
+    LOG(ERROR) << "Duplicate metadata field: " << fieldtype << " encountered";
     return true;
   }
 }
 
+// Verifies the presence of mandatory metadata fields
+bool mandatoryMetaFieldsPresent(const auto& available_metafields,
+                                const auto& mandatory_fields) {
+  for (const auto& item : mandatory_fields) {
+    auto search = available_metafields.find(item);
+    if (search == available_metafields.end() || search->second != true) {
+      LOG(ERROR) << "Missing metadata field: " << item
+                 << " for LOAD/UPDATE script";
+      return false;
+    }
+  }
+  return true;
+}
+
+// Helper function to convert Hex string to byte array
+std::vector<uint8_t> hexStringtoBytes(const auto& hex_string) {
+  uint8_t read_buf = 0x00;
+  std::vector<uint8_t> result;
+  for (int x = 0; x < hex_string.size();) {
+    SSCANF_BYTE(hex_string.c_str() + x, "%2X", &read_buf);
+    result.push_back(read_buf);
+    x = x + 2;
+  }
+  return result;
+}
+
+// Parses metadata section for each script
 ParseMetadataError ParseSemsMetadata(const char* path) {
   std::ifstream file(path);
   if (!file.is_open()) {
@@ -651,7 +689,6 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
     }
     // Read the file line by line
     if (!std::getline(file, line)) {
-      LOG(INFO) << "File read completed";
       break;
     }
     if (line.rfind("%%%", 0) == 0) {  // Check if line starts with %%%
@@ -666,10 +703,8 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
       metadata.push_back(
           std::make_pair(key, std::make_pair(value, std::streampos(-1))));
     } else if (line.rfind("7f21", 0) == 0) {
-      LOG(DEBUG) << "7F21 found, record script offset";
       script_start_offset = line_start_offset;
     } else if (line.rfind("60", 0) == 0) {
-      LOG(DEBUG) << "Found auth frame";
       std::string key = "AUTH_FRAME" + std::to_string(auth_frame_number);
       trim(line);
       metadata.push_back(
@@ -684,59 +719,44 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
   }
 
   SemsScriptType script_type = INVALID_SCRIPT;
-  if (!strncmp(metadata[0].first.c_str(), "SEMSType", strlen("SEMSType"))) {
-    uint8_t current_byte;
-    SSCANF_BYTE(metadata[0].second.first.c_str(), "%2X", &current_byte);
-    script_type = (SemsScriptType)current_byte;
+  // Find script type first
+  for (int i = 0; i < metadata.size(); i++) {
+    if (metadata[i].first == "SEMSType") {
+      uint8_t current_byte;
+      SSCANF_BYTE(metadata[0].second.first.c_str(), "%2X", &current_byte);
+      script_type = (SemsScriptType)current_byte;
+      break;
+    }
   }
 
-  std::set<std::string> load_update_script_metafields;
-  std::set<std::string> getstatus_script_metafields;
+  std::unordered_map<std::string, bool> load_update_script_metafields;
+  std::unordered_map<std::string, bool> getstatus_script_metafields;
+
   struct LoadUpdateScriptMetaInfo load_update_script_temp;
   memset(&load_update_script_temp, 0, sizeof(struct LoadUpdateScriptMetaInfo));
 
   for (int i = 0; i < metadata.size(); i++) {
     if (script_type == SemsScriptType::LOAD_SCRIPT ||
         script_type == SemsScriptType::UPDATE_SCRIPT) {
-      if (!metadata[i].first.compare(0, strlen("AppletAID"), "AppletAID")) {
-        uint8_t read_buf = 0x00;
-        std::vector<uint8_t> partial_aid;
-        for (int x = 0; x < metadata[i].second.first.size();) {
-          SSCANF_BYTE(metadata[i].second.first.c_str() + x, "%2X", &read_buf);
-          partial_aid.push_back(read_buf);
-          x = x + 2;
-        }
-        load_update_script_temp.applet_aid_partial = partial_aid;
-        if (IsDuplicateEntry(load_update_script_metafields, "AppletAID")) {
-          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
-        }
+      const std::string& key = metadata[i].first;
+
+      if (IsDuplicateEntry(load_update_script_metafields, key)) {
+        return ParseMetadataError::DUPLICATE_METADATA_FIELD;
       }
-      if (!metadata[i].first.compare(0, strlen("ELFAID"), "ELFAID")) {
-        uint8_t read_buf = 0x00;
-        std::vector<uint8_t> elf_aid;
-        for (int x = 0; x < metadata[i].second.first.size();) {
-          SSCANF_BYTE(metadata[i].second.first.c_str() + x, "%2X", &read_buf);
-          elf_aid.push_back(read_buf);
-          x = x + 2;
-        }
-        load_update_script_temp.elf_aid_complete = elf_aid;
-        if (IsDuplicateEntry(load_update_script_metafields, "ELFAID")) {
-          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
-        }
+      if (key == "AppletAID") {
+        load_update_script_temp.applet_aid_partial =
+            hexStringtoBytes(metadata[i].second.first);
       }
-      if (!metadata[i].first.compare(0, strlen("ELFVersion"), "ELFVersion")) {
-        uint8_t read_buf = 0x00;
-        for (int x = 0; x < metadata[i].second.first.size();) {
-          SSCANF_BYTE(metadata[i].second.first.c_str() + x, "%2X", &read_buf);
-          load_update_script_temp.elf_version.push_back(read_buf);
-          x = x + 2;
-        }
-        if (IsDuplicateEntry(load_update_script_metafields, "ELFVersion")) {
-          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
-        }
+      if (key == "ELFAID") {
+        load_update_script_temp.elf_aid_complete =
+            hexStringtoBytes(metadata[i].second.first);
       }
-      if (!metadata[i].first.compare(0, strlen("MinVolatileMemory"),
-                                     "MinVolatileMemory")) {
+      if (key == "ELFVersion") {
+        load_update_script_temp.elf_version =
+            hexStringtoBytes(metadata[i].second.first);
+      }
+
+      if (key == "MinVolatileMemory") {
         try {
           load_update_script_temp.mem_req.min_volatile_memory_bytes =
               static_cast<uint32_t>(
@@ -745,13 +765,8 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
           LOG(ERROR) << "MinVolatileMemory: value is not a valid hex number";
           return ParseMetadataError::INVALID_HEX_FIELD;
         }
-        if (IsDuplicateEntry(load_update_script_metafields,
-                             "MinVolatileMemory")) {
-          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
-        }
       }
-      if (!metadata[i].first.compare(0, strlen("MinNonVolatileMemory"),
-                                     "MinNonVolatileMemory")) {
+      if (key == "MinNonVolatileMemory") {
         try {
           load_update_script_temp.mem_req.min_non_volatile_memory_bytes =
               static_cast<uint32_t>(
@@ -760,63 +775,44 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
           LOG(ERROR) << "MinNonVolatileMemory: value is not a valid hex number";
           return ParseMetadataError::INVALID_HEX_FIELD;
         }
-        if (IsDuplicateEntry(load_update_script_metafields,
-                             "MinNonVolatileMemory")) {
-          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
-        }
       }
-      if (!metadata[i].first.compare(0, strlen("PlatformID"), "PlatformID")) {
+      if (key == "PlatformID") {
         uint8_t read_buf = 0x00;
         SSCANF_BYTE(metadata[i].second.first.c_str(), "%2X", &read_buf);
         load_update_script_temp.platform_id = read_buf;
-        if (IsDuplicateEntry(load_update_script_metafields, "PlatformID")) {
-          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
-        }
       }
-      if (!metadata[i].first.compare(0, strlen("SEMSType"), "SEMSType")) {
+      if (key == "SEMSType") {
         load_update_script_temp.script_type = script_type;
         load_update_script_temp.script_path = path;
-        if (IsDuplicateEntry(load_update_script_metafields, "SEMSType")) {
-          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
-        }
       }
-      if (!metadata[i].first.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
+      if (!key.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
         std::string auth_frame_string = metadata[i].second.first;
         std::streampos script_offset = metadata[i].second.second;
         std::vector<uint8_t> auth_frame_sign;
         ParseAuthFrameSignature(std::move(auth_frame_string), auth_frame_sign);
-        LOG(DEBUG) << "frame signature is:" << toString(auth_frame_sign);
         load_update_script_temp.signatures.push_back(
             std::make_pair(auth_frame_sign, script_offset));
       }
     }
     if (script_type == SemsScriptType::GET_STATUS_SCRIPT) {
-      if (!metadata[i].first.compare(0, strlen("SEMSType"), "SEMSType")) {
+      const std::string& key = metadata[i].first;
+
+      if (IsDuplicateEntry(getstatus_script_metafields, key)) {
+        return ParseMetadataError::DUPLICATE_METADATA_FIELD;
+      }
+      if (key == "SEMSType") {
         getstatus_script.script_type = script_type;
         getstatus_script.script_path = path;
-        if (IsDuplicateEntry(getstatus_script_metafields, "SEMSType")) {
-          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
-        }
       }
-      if (!metadata[i].first.compare(0, strlen("AppletAID"), "AppletAID")) {
-        uint8_t read_buf = 0x00;
-        std::vector<uint8_t> partial_aid;
-        for (int x = 0; x < metadata[i].second.first.size();) {
-          SSCANF_BYTE(metadata[i].second.first.c_str() + x, "%2X", &read_buf);
-          partial_aid.push_back(read_buf);
-          x = x + 2;
-        }
-        getstatus_script.applet_aids_partial.push_back(partial_aid);
-        if (IsDuplicateEntry(getstatus_script_metafields, metadata[i].first)) {
-          return ParseMetadataError::DUPLICATE_METADATA_FIELD;
-        }
+      if (!key.compare(0, strlen("AppletAID"), "AppletAID")) {
+        getstatus_script.applet_aids_partial.push_back(
+            hexStringtoBytes(metadata[i].second.first));
       }
-      if (!metadata[i].first.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
+      if (!key.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
         std::string auth_frame_string = metadata[i].second.first;
         std::vector<uint8_t> auth_frame_signature;
         ParseAuthFrameSignature(std::move(auth_frame_string),
                                 auth_frame_signature);
-        LOG(DEBUG) << "frame signature is:" << toString(auth_frame_signature);
         getstatus_script.signature = auth_frame_signature;
       }
     }
@@ -824,18 +820,20 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
 
   if (script_type == SemsScriptType::LOAD_SCRIPT ||
       script_type == SemsScriptType::UPDATE_SCRIPT) {
-    if (load_update_script_metafields.size() <
-        MIN_METADATA_FIELDS_LOAD_UPDATE_SCRIPT) {
-      LOG(ERROR) << "Missing metadata field for LOAD/UPDATE script";
+    if (!mandatoryMetaFieldsPresent(
+            load_update_script_metafields,
+            MANDATORY_METADATA_FIELDS_LOAD_UPDATE_SCRIPT)) {
       return ParseMetadataError::MISSING_METADATA_FIELD;
     }
     load_update_script.push_back(load_update_script_temp);
   } else if (script_type == SemsScriptType::GET_STATUS_SCRIPT) {
-    if (getstatus_script_metafields.size() <
-        MIN_METADATA_FIELDS_GETSTATUS_SCRIPT) {
-      LOG(ERROR) << "Missing metadata field for GET_STATUS script";
+    if (!mandatoryMetaFieldsPresent(
+            getstatus_script_metafields,
+            MANDATORY_METADATA_FIELDS_GETSTATUS_SCRIPT)) {
       return ParseMetadataError::MISSING_METADATA_FIELD;
     }
+  } else {
+    return ParseMetadataError::INVALID_SEMS_TYPE;
   }
   return ParseMetadataError::SUCCESS;
 }
