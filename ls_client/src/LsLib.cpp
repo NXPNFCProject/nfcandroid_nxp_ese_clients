@@ -51,6 +51,8 @@ FILE* fLS_STATUS = NULL;
 uint8_t lsGetStatusArr[2];
 phNxpLs_data cmdApdu;
 phNxpLs_data rspApdu;
+static UpdaterConfig updaterCfg;
+
 static tLSC_STATUS LSC_Transceive(phNxpLs_data* pCmd, phNxpLs_data* pRsp);
 tLSC_STATUS (*Applet_load_seqhandler[])(Lsc_ImageInfo_t* pContext,
                                         tLSC_STATUS status,
@@ -75,7 +77,9 @@ bool initialize (IChannel_t* channel)
 #else
     ALOGI("%s: SE_UPDATE_AGENT- lib version: %s ", fn, LibSWVersion);
 #endif
-
+    updaterCfg = {
+        .updater_kind = SemsUpdaterKind::SEMS_MAIN,
+    };
     gpLsc_Dwnld_Context = (pLsc_Dwnld_Context_t)malloc(sizeof(Lsc_Dwnld_Context_t));
     if(gpLsc_Dwnld_Context != NULL)
     {
@@ -416,6 +420,7 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
         cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
         memcpy(&(cmdApdu.p_data[1]), &AID_ARRAY[2], cmdApdu.len - 1);
         Os_info->isUpdaterMode = false;
+        updaterCfg.updater_kind = SemsUpdaterKind::SEMS_UPDATER;
       } else {
         ALOGE("Select AID: %s", ARR_AS_STRING(SelectSEMS).c_str());
         cmdApdu.len =
@@ -423,6 +428,7 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
         cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
         cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
         memcpy(&(cmdApdu.p_data[1]), SelectSEMS, sizeof(SelectSEMS));
+        updaterCfg.updater_kind = SemsUpdaterKind::SEMS_MAIN;
       }
     }
 #ifdef NXP_BOOTTIME_UPDATE
@@ -496,6 +502,8 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
         Os_info->channel_cnt++;
         status = Process_SelectRsp(&rspApdu.p_data[1], (rspApdu.len - 2));
 #endif
+        ALOGI("Updater Type changed to SEMSUpdater");
+        updaterCfg.updater_kind = SemsUpdaterKind::SEMS_UPDATER;
         if (status != STATUS_OKAY) {
           ALOGE("%s: Select Lsc Rsp doesnt have a valid key; status = 0x%X", fn,
                 status);
@@ -2148,6 +2156,8 @@ static tLSC_STATUS LSC_Transceive(phNxpLs_data* pCmd, phNxpLs_data* pRsp)
   }
   return status;
 }
+const UpdaterConfig getUpdaterConfig() { return updaterCfg; }
+
 /*******************************************************************************
  *
  * Function         toString

@@ -36,10 +36,7 @@
 #include <vector>
 
 #define MAX_RETRY_LOAD 3
-constexpr char SEMS_SELF_UPDATE_DIR_NAME[] = "sems_self_update";
-static TransportType current_transport = TransportType::HAL_TO_OMAPI;
-IChannel_t Ch;
-ese_update_state_t ese_update = ESE_UPDATE_COMPLETED;
+const std::string SEMS_SELF_UPDATE_DIR_NAME = "sems_self_update";
 constexpr char kEseLoadPendingProp[] = "vendor.se_update_agent.load_pending";
 constexpr char kEseLoadRetryCountProp[] =
     "persist.vendor.se_update_agent.load_retry_cnt";
@@ -61,6 +58,12 @@ void eSEClientUpdate_Thread(const char* path);
 SESTATUS ESE_ChannelInit(IChannel* ch);
 uint8_t performLSUpdate(const char* path, std::streampos start_offset);
 SESTATUS eSEUpdate_SeqHandler(const char* path, std::streampos start_offset);
+static std::streampos getStartoffset(
+    const struct LoadUpdateScriptMetaInfo& script);
+
+static TransportType current_transport = TransportType::HAL_TO_OMAPI;
+IChannel_t Ch;
+ese_update_state_t ese_update = ESE_UPDATE_COMPLETED;
 
 void SE_Reset() { /* phNxpEse_coldReset(); */ }
 
@@ -514,6 +517,7 @@ SESTATUS ApplyUpdate(ExecutionState exe_state) {
   bool preload_pending = false;
   ALOGI("exe_state is %d", exe_state);
   for (const auto& current_script : all_scripts_info) {
+    std::streampos start_offset = 0;  // default from begining
     std::string script_path;
     switch (exe_state) {
       case ExecutionState::UPDATE:
@@ -526,6 +530,7 @@ SESTATUS ApplyUpdate(ExecutionState exe_state) {
           } else if (hasSufficientESEMemoryForScript(
                          current_script.update_script)) {
             script_path = current_script.update_script.script_path;
+            start_offset = getStartoffset(current_script.update_script);
           }
         }
         break;
@@ -534,6 +539,7 @@ SESTATUS ApplyUpdate(ExecutionState exe_state) {
             current_script.load_script_exists &&
             hasSufficientESEMemoryForScript(current_script.load_script)) {
           script_path = current_script.load_script.script_path;
+          start_offset = getStartoffset(current_script.load_script);
         }
         break;
       case ExecutionState::GET_STATUS:
@@ -546,7 +552,7 @@ SESTATUS ApplyUpdate(ExecutionState exe_state) {
     if (!script_path.empty()) {
       ALOGI("Start SEMS execution for script: %s", script_path.c_str());
       auto exec_status =
-          ExecuteSemsScript(script_path.c_str(), 0 /*from start*/, exe_state);
+          ExecuteSemsScript(script_path.c_str(), start_offset, exe_state);
       if (exec_status != SESTATUS_OK) {
         status = exec_status;
         ALOGE("Failed: SEMS execution for script: %s", script_path.c_str());
@@ -707,4 +713,29 @@ void LogVersionInfo(const std::string& script_dir_path) {
     }
   }
   PrintVersionTable();
+}
+
+// Returns start offset based on the type of SEMS updater currently active
+// Relevant only during Sems self update
+
+static std::streampos getStartoffset(
+    const struct LoadUpdateScriptMetaInfo& script) {
+  std::streampos start_offset = 0;
+
+  // Special case for SEMS self update. Start the script execution from SEMS
+  // Updater part if currently selectable SEMS Type is SEMS_UPDATER
+
+  const std::string SEMS_UPDATE_PATH_PREFIX =
+      "/" + SEMS_SELF_UPDATE_DIR_NAME + "/";
+
+  if (getUpdaterConfig().updater_kind == SemsUpdaterKind::SEMS_UPDATER &&
+      script.script_path.find(SEMS_UPDATE_PATH_PREFIX) != std::string::npos) {
+    start_offset = (script.signatures.size() > 1)
+                       ? script.signatures[1].second
+                       : static_cast<std::streampos>(0);
+  }
+
+  ALOGD("%s: start_offset = %lld", __FUNCTION__,
+        static_cast<long long>(start_offset));
+  return start_offset;
 }

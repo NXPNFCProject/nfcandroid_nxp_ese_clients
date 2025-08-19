@@ -24,6 +24,16 @@ typedef enum InterfaceInfo {
   INTF_NFC = 0,
   INTF_SE = 1,
 } IntfInfo;
+
+typedef enum SemsUpdaterKind {
+  SEMS_MAIN = 0,
+  SEMS_UPDATER = 1,
+} SemsUpdaterKind;
+
+typedef struct UpdaterConfig {
+  SemsUpdaterKind updater_kind;
+} UpdaterConfig;
+
 typedef struct IChannel {
   /*******************************************************************************
   **
@@ -128,4 +138,14 @@ typedef struct IChannel {
   bool (*parse_response)(uint8_t* recvBuffer, int32_t recvBufferSize);
 } IChannel_t;
 
+/*******************************************************************************
+ **
+ ** Function:        getUpdaterConfig
+ **
+ ** Description:     Returns type of Updater used and its state
+ **
+ ** Returns:         UpdaterConfig.
+ **
+ *******************************************************************************/
+const UpdaterConfig getUpdaterConfig();
 #endif /* ICHANNEL_H_ */
