@@ -336,11 +336,17 @@ static SESTATUS ParseSemsScriptsMetadataInternal(
     return SESTATUS_FAILED;
   }
 
+  const size_t VENDOR_ID_LENGTH = 5;
   std::vector<uint8_t> atr;
   SEConnection::getInstance().getAtr(atr);
-  std::vector<uint8_t> chip_type(atr.begin(), atr.begin() + 5);
 
-  result = FilterScripts(chip_type);
+  if (atr.size() < VENDOR_ID_LENGTH) {
+    return SESTATUS_FAILED;
+  }
+  std::vector<uint8_t> ese_vendor_id;
+  ese_vendor_id.assign(atr.begin(), atr.begin() + VENDOR_ID_LENGTH);
+
+  result = FilterScripts(ese_vendor_id);
   if (result != ParseMetadataError::SUCCESS) {
     return SESTATUS_SCRIPT_PARSE_FAILURE;
   }
