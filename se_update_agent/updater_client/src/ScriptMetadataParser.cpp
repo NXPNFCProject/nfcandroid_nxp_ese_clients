@@ -889,10 +889,16 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
 
   while (file) {
     line_start_offset = file.tellg();
+
     if (line_start_offset == -1) {
       LOG(ERROR) << "Failed to read current position in file. errno: " << errno;
-      file.close();
-      return ParseMetadataError::FILE_IO_ERROR;
+      file.clear();
+      if (!file.good()) {
+        LOG(ERROR) << "file stream " << path
+                   << " is corrupted. rdstate:" << file.rdstate();
+        file.close();
+        return ParseMetadataError::FILE_IO_ERROR;
+      }
     }
     // Read the file line by line
     if (!std::getline(file, line)) {
@@ -913,6 +919,7 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
       script_start_offset = line_start_offset;
     } else if (line.rfind("60", 0) == 0) {
       std::string key = "AUTH_FRAME" + std::to_string(auth_frame_number);
+      auth_frame_number++;
       trim(line);
       metadata.push_back(
           std::make_pair(key, std::make_pair(line, script_start_offset)));
