@@ -19,24 +19,25 @@
 #ifndef __METADATA_PARSER__
 #define __METADATA_PARSER__
 #include <SEUpdaterClient.h>
+#include <stdint.h>
 #include <iomanip>
 #include <string>
 #include <vector>
 
-enum SemsScriptType {
+enum SemsScriptType : uint8_t {
   UPDATE_SCRIPT,
   LOAD_SCRIPT,
   GET_STATUS_SCRIPT,
   INVALID_SCRIPT
 };
-enum ExecutionState { GET_STATUS, LOAD, UPDATE };
-enum GetStatusResponseType { INSTANCE_DATA, MATCHING_ELF_DATA };
+enum ExecutionState : uint8_t { GET_STATUS, LOAD, UPDATE };
+enum GetStatusResponseType : uint8_t { INSTANCE_DATA, MATCHING_ELF_DATA };
 
-enum ParseMetadataError {
-  SUCCESS = 0,  // Parsing succeeded
-  FILE_IO_ERROR, // Error reading from file
-  FILE_NOT_FOUND,  // Script not found
-  INVALID_SEMS_TYPE, // Unknown SemsScriptType type
+enum ParseMetadataError : uint8_t {
+  SUCCESS = 0,               // Parsing succeeded
+  FILE_IO_ERROR,             // Error reading from file
+  FILE_NOT_FOUND,            // Script not found
+  INVALID_SEMS_TYPE,         // Unknown SemsScriptType type
   MISSING_METADATA,          // No metadata in the script
   MISSING_METADATA_FIELD,    // Missing metadata field
   DUPLICATE_METADATA_FIELD,  // Duplicate metadata field
@@ -47,6 +48,11 @@ struct MatchingELF {
   std::vector<uint8_t> elf_aid_complete;
   std::vector<std::vector<uint8_t>> module_aids;
   std::vector<uint8_t> elf_version;
+  void reset() {
+    elf_aid_complete.clear();
+    module_aids.clear();
+    elf_version.clear();
+  }
 };
 
 // Store response for Getstatus cmd
@@ -67,6 +73,11 @@ struct GetStatusScriptMetaInfo {
   std::vector<std::vector<uint8_t>> applet_aids_partial;
   std::vector<uint8_t> signature;
   std::string script_path;
+  void reset() {
+    applet_aids_partial.clear();
+    signature.clear();
+    script_path.clear();
+  }
 };
 
 // Minimum memory requirements for installing a secure element applet.
@@ -132,7 +143,7 @@ ParseMetadataError ParseSemsScriptsMetadata(std::string script_dir_path,
  * Filter parsed metadata files applicable for current chiptype
  * and remove invalid scripts
  */
-ParseMetadataError FilterScripts(std::vector<uint8_t>& chip_type);
+ParseMetadataError FilterScripts(const std::vector<uint8_t>& chip_type);
 
 /**
  * Parses response received during GETSTATUS script execution

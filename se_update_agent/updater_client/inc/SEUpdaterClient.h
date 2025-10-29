@@ -18,19 +18,20 @@
 #ifndef ESE_UPDATE_2_H_
 #define ESE_UPDATE_2_H_
 
+#include <stdint.h>
 #include <string>
 #ifdef NXP_BOOTTIME_UPDATE
 #include "eSEClientIntf.h"
 #define SESTATUS_OK SESTATUS_SUCCESS
 #else
-typedef enum {
-  SESTATUS_OK = (0x0000),
-  SESTATUS_FAILED = (0x0003),
-  SESTATUS_FILE_NOT_FOUND = (0x0005),
-  SESTATUS_SCRIPT_PARSE_FAILURE = (0x0007),
+typedef enum : uint8_t {
+  SESTATUS_OK = (0x00),
+  SESTATUS_FAILED = (0x03),
+  SESTATUS_FILE_NOT_FOUND = (0x05),
+  SESTATUS_SCRIPT_PARSE_FAILURE = (0x07),
 } SESTATUS;
 
-typedef enum {
+typedef enum : uint8_t {
   ESE_UPDATE_COMPLETED = 0,
   ESE_UPDATE_STARTED,
   ESE_LS_UPDATE_REQUIRED,

@@ -19,6 +19,7 @@
 #ifndef ESE_UPDATE_UTILS_H_
 #define ESE_UPDATE_UTILS_H_
 
+#include <stdint.h>
 #include <unistd.h>
 #include <iostream>
 #include <vector>
@@ -26,7 +27,7 @@
 #define GET_PLATFORM_IDENTIFIER_RSP_SIZE 23
 #define SN220_V3_JCOP_BASE_REV_NUM (0x03D043)
 
-enum PlatformID { SN220_V3, SN220_V5, SN300, SN330, SN470, INVALID };
+enum PlatformID : uint8_t { SN220_V3, SN220_V5, SN300, SN330, SN470, INVALID };
 
 const static std::vector<std::pair<std::vector<uint8_t>, PlatformID>> ChipIds =
     {

@@ -30,7 +30,7 @@
 
 #define GENERATED_HASH_SIZE 20
 
-uint8_t datahex(char c);
+static uint8_t datahex(char c);
 void updateLsAid(uint8_t intfInfo);
 /*******************************************************************************
 **
@@ -41,15 +41,15 @@ void updateLsAid(uint8_t intfInfo);
 ** Returns:         SUCCESS if ok.
 **
 *******************************************************************************/
-tLSC_STATUS LsClient_Start(const char* name, const char* dest,
-                           std::streampos start_offset, uint8_t* pdata,
-                           uint16_t len, uint8_t* respSW) {
+static tLSC_STATUS LsClient_Start(const char* name, const char* dest,
+                                  std::streampos start_offset, uint8_t* pdata,
+                                  uint16_t len) {
   static const char fn[] = "LsClient_Start";
   tLSC_STATUS status = STATUS_FAILED;
   if (name != NULL) {
     ALOGE("%s: name is %s", fn, name);
     ALOGE("%s: Dest is %s", fn, dest);
-    status = Perform_LSC(name, dest, start_offset, pdata, len, respSW);
+    status = Perform_LSC(name, dest, start_offset, pdata, len);
   } else {
     ALOGE("Invalid parameter");
   }
@@ -59,7 +59,7 @@ tLSC_STATUS LsClient_Start(const char* name, const char* dest,
 
 tLSC_STATUS LsClient_SemsSelect(IChannel_t* data) {
   tLSC_STATUS status = STATUS_FAILED;
-  if (!initialize((IChannel_t*)data)) {
+  if (!initialize(data)) {
     ALOGE("%s: initialize failed", __FUNCTION__);
   } else {
     status = LsLib_SelectSemsAID();
@@ -93,33 +93,28 @@ tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path,
   {"/data/vendor/nfc/loaderservice_updater_out.txt",
    "/data/vendor/secure_element/loaderservice_updater_out.txt",};
 #endif
-  IChannel_t* mchannel = (IChannel_t*)data;
 
-  /*generated SHA-1 string for secureElementLS
+  /*generated SHA-1 for secureElementLS
   This will remain constant as handled in secureElement HAL*/
-  const char sha1[] = "6d583e84f2710e6b0f06beebc1a12a1083591373";
-  uint8_t hash[GENERATED_HASH_SIZE] = {};
-
-  for (int i = 0; i < (2 * GENERATED_HASH_SIZE); i = i + 2) {
-    hash[i / 2] =
-        (((datahex(sha1[i]) & 0x0F) << 4) | (datahex(sha1[i + 1]) & 0x0F));
-  }
+  uint8_t hash[GENERATED_HASH_SIZE] = {0x6D, 0x58, 0x3E, 0x84, 0xF2, 0x71, 0x0E,
+                                       0x6B, 0x0F, 0x06, 0xBE, 0xEB, 0xC1, 0xA1,
+                                       0x2A, 0x10, 0x83, 0x59, 0x13, 0x73};
 
 #ifdef NXP_BOOTTIME_UPDATE
+  IChannel_t* mchannel = data;
   /*Check and update if any new LS AID is available*/
   updateLsAid(mchannel->getInterfaceInfo());
 
   if(!initialize ((IChannel_t*) data))
     return status;
 
-
-  uint8_t resSW[4] = {0x4e, 0x02, 0x69, 0x87};
-  FILE* fIn, *fOut;
+  FILE* fIn;
   if ((fIn = fopen(lsUpdateBackupPath, "rb")) == NULL) {
     ALOGE("%s Cannot open file %s\n", __func__, lsUpdateBackupPath);
     ALOGE("%s Error : %s", __func__, strerror(errno));
     return status;
   } else {
+    FILE* fOut = NULL;
     ALOGD("%s File opened %s\n", __func__, lsUpdateBackupPath);
     if ((fOut = fopen(lsUpdateBackupOutPath[mchannel->getInterfaceInfo()], "wb")) == NULL) {
       ALOGE("%s Failed to open file %s\n", __func__,
@@ -134,8 +129,7 @@ tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path,
     }
     status = LsClient_Start(lsUpdateBackupPath,
                             lsUpdateBackupOutPath[mchannel->getInterfaceInfo()],
-                            0, (uint8_t*)hash, (uint16_t)sizeof(hash), resSW);
-    resSW[0]=0x4e;
+                            0, (uint8_t*)hash, (uint16_t)sizeof(hash));
     ALOGD("%s LSC_Start completed\n", __func__);
     if (status == STATUS_SUCCESS) {
       if (remove(lsUpdateBackupPath) == 0) {
@@ -149,17 +143,16 @@ tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path,
   }
 #else
 
-  if (initialize((IChannel_t*)data)) {
-    uint8_t resSW[4] = {0x4e, 0x02, 0x69, 0x87};
-    FILE* fIn;
-    if ((fIn = fopen(script_path, "rb")) == NULL) {
+  if (initialize(data)) {
+    FILE* fIn = fopen(script_path, "rb");
+    if (fIn == NULL) {
       ALOGE("%s Cannot open file %s: error- %s\n", __func__, script_path,
             strerror(errno));
     } else {
       fclose(fIn);
-      status = LsClient_Start(script_path, NULL, start_offset, (uint8_t*)hash,
-                              (uint16_t)sizeof(hash), resSW);
-      resSW[0] = 0x4e;
+      status = LsClient_Start(script_path, NULL, start_offset,
+                              static_cast<uint8_t*>(hash),
+                              static_cast<uint16_t>(sizeof(hash)));
       if (status == STATUS_SUCCESS) {
         ALOGD("%s LsClient_Start completed\n", __func__);
       }
@@ -182,12 +175,13 @@ tLSC_STATUS performLSDownload(IChannel_t* data, const char* script_path,
 *******************************************************************************/
 uint8_t datahex(char c) {
   uint8_t value = 0;
-  if (c >= '0' && c <= '9')
+  if (c >= '0' && c <= '9') {
     value = (c - '0');
-  else if (c >= 'A' && c <= 'F')
+  } else if (c >= 'A' && c <= 'F') {
     value = (10 + (c - 'A'));
-  else if (c >= 'a' && c <= 'f')
+  } else if (c >= 'a' && c <= 'f') {
     value = (10 + (c - 'a'));
+  }
   return value;
 }
 

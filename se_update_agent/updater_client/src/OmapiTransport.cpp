@@ -51,8 +51,6 @@
 #define UNUSED_V(a) a = a
 #define RESP_CHANNEL_NOT_AVAILABLE 0x6881
 
-using android::base::StringPrintf;
-
 namespace se_update_agent {
 
 std::string const ESE_READER_PREFIX = "eSE";
@@ -72,7 +70,8 @@ bool OmapiTransport::initialize() {
   LOG(INFO) << "Initialize the secure element connection";
 
   // Get OMAPI vendor stable service handler
-  ::ndk::SpAIBinder ks2Binder(AServiceManager_checkService(omapiServiceName));
+  const ::ndk::SpAIBinder ks2Binder(
+      AServiceManager_checkService(omapiServiceName));
   omapiSeService =
       aidl::android::se::omapi::ISecureElementService::fromBinder(ks2Binder);
 
@@ -118,9 +117,9 @@ bool OmapiTransport::initialize() {
       if (name.find(ESE_READER_PREFIX, 0) != std::string::npos) {
         LOG(DEBUG) << "eSE reader found: " << name;
         eSEReader = reader;
-        std::string prefTerminalName = "eSE1";
-        if (name.compare(prefTerminalName) == 0x00) {
-          LOG(INFO) << "Found reader " << prefTerminalName << " breaking.";
+        const std::string prefTerminalName = "eSE1";
+        if (name == prefTerminalName) {
+          LOG(INFO) << "Found reader " << prefTerminalName << ", breaking.";
           break;
         }
       }
@@ -172,7 +171,6 @@ bool OmapiTransport::openConnection() {
 
 bool OmapiTransport::sendData(const vector<uint8_t>& inData,
                               vector<uint8_t>& output) {
-  std::vector<uint8_t> apdu(inData);
   if (!isConnected()) {
     // Try to initialize connection to eSE
     LOG(INFO) << "Not connected, try to initialize connection to OMAPI";
@@ -207,7 +205,7 @@ bool OmapiTransport::sendData(const vector<uint8_t>& inData,
       return false;
     }
 
-    auto res = channel->transmit(apdu, &output);
+    auto res = channel->transmit(inData, &output);
 
     if (!res.isOk()) {
       LOG(ERROR) << "transmit error: " << res.getMessage();
@@ -230,8 +228,6 @@ void OmapiTransport::closeConnection() {
       }
       mVSReaders.clear();
     }
-  }
-  if (omapiSeService != nullptr) {
     AIBinder_unlinkToDeath(omapiSeService->asBinder().get(),
                            mDeathRecipient.get(), this);
     omapiSeService = nullptr;
@@ -257,7 +253,8 @@ bool OmapiTransport::closeChannel(uint8_t channel_num) {
   return true;
 }
 
-bool OmapiTransport::openChannel(std::vector<uint8_t>& aid, int8_t& channel_num,
+bool OmapiTransport::openChannel(const std::vector<uint8_t>& aid,
+                                 int8_t& channel_num,
                                  std::vector<uint8_t>& select_resp) {
   auto mSEListener = ndk::SharedRefBase::make<SEListener>();
   if (eSEReader == nullptr) {
@@ -288,7 +285,7 @@ bool OmapiTransport::openChannel(std::vector<uint8_t>& aid, int8_t& channel_num,
     }
   }
   if ((channel == nullptr || (channel->isClosed(&status).isOk() && status))) {
-    auto res = session->openLogicalChannel(aid, 0x00, mSEListener, &channel);
+    res = session->openLogicalChannel(aid, 0x00, mSEListener, &channel);
     if (!res.isOk()) {
       LOG(ERROR) << "openLogicalChannel error: " << res.getMessage();
       // Assume Applet selection Fail

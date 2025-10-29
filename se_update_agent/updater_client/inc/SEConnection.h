@@ -21,9 +21,7 @@
 
 #include <ITransport.h>
 
-using se_update_agent::ITransport;
-
-enum TransportType { HAL_TO_HAL, HAL_TO_OMAPI };
+enum TransportType : std::uint8_t { HAL_TO_HAL, HAL_TO_OMAPI };
 
 class SEConnection {
  public:
@@ -38,6 +36,9 @@ class SEConnection {
    */
   static SEConnection& getInstance(TransportType transport = HAL_TO_OMAPI);
 
+  std::shared_ptr<se_update_agent::ITransport> getTransport() {
+    return transport_;
+  }
   /**
    * Get ATR info from eSE
    */
@@ -49,10 +50,10 @@ class SEConnection {
    */
   SEConnection(SEConnection const&) = delete;
   void operator=(SEConnection const&) = delete;
-  std::shared_ptr<ITransport> transport_;
 
  private:
-  SEConnection(TransportType transport_type);
+  std::shared_ptr<se_update_agent::ITransport> transport_;
+  explicit SEConnection(TransportType transport_type);
   TransportType transport_type_;
 };
 #endif  // SE_CONNECTION_H_

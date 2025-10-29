@@ -43,7 +43,7 @@ typedef uint8_t tLSC_STATUS;
 **
 *******************************************************************************/
 unsigned char LsClient_Start(const char* name, const char* dest, uint8_t* pdata,
-                             uint16_t len, uint8_t* respSW);
+                             uint16_t len);
 
 /*******************************************************************************
 **

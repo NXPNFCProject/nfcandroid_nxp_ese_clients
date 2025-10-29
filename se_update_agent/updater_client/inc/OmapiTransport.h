@@ -81,7 +81,7 @@ class OmapiTransport : public ITransport {
   /**
    * Opens Logical channel
    */
-  virtual bool openChannel(std::vector<uint8_t>& aid, int8_t& channel_num,
+  virtual bool openChannel(const std::vector<uint8_t>& aid, int8_t& channel_num,
                            std::vector<uint8_t>& select_resp) override;
   /**
    * Transmists the data over the opened basic channel and receives the data
@@ -130,8 +130,8 @@ class OmapiTransport : public ITransport {
   bool openChannelToApplet();
   inline uint16_t getApduStatus(std::vector<uint8_t>& inputData) {
     // Last two bytes are the status SW0SW1
-    uint8_t SW0 = inputData.at(inputData.size() - 2);
-    uint8_t SW1 = inputData.at(inputData.size() - 1);
+    const uint8_t SW0 = inputData.at(inputData.size() - 2);
+    const uint8_t SW1 = inputData.at(inputData.size() - 1);
     return (SW0 << 8 | SW1);
   }
 };

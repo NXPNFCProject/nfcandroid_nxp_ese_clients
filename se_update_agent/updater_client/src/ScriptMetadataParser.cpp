@@ -44,15 +44,14 @@ const std::vector<std::string> MANDATORY_METADATA_FIELDS_GETSTATUS_SCRIPT = {
 #define FIRST_COL_WIDTH 40
 #define OTHER_COL_WIDTH 20
 
-void PrintAllParsedMetadata();
 static std::vector<struct LoadUpdateScriptMetaInfo> load_update_script;
 static std::vector<struct SemsScriptInfo> all_scripts_info;
-struct GetStatusScriptMetaInfo getstatus_script;
+static struct GetStatusScriptMetaInfo getstatus_script;
 static std::vector<struct GetStatusResponse> getstatus_response;
 
 static ExecutionState exe_state;
 
-std::vector<std::string> rows;
+static std::vector<std::string> rows;
 
 const std::vector<struct SemsScriptInfo> GetEnumeratedScriptsData() {
   return all_scripts_info;
@@ -61,11 +60,11 @@ const std::vector<struct SemsScriptInfo> GetEnumeratedScriptsData() {
 const struct GetStatusScriptMetaInfo GetStatusScriptData() {
   return getstatus_script;
 }
-void ResetGlobalMetadataState(bool clear_version_table) {
+static void ResetGlobalMetadataState(bool clear_version_table) {
   load_update_script.clear();
   all_scripts_info.clear();
   getstatus_response.clear();
-  memset(&getstatus_script, 0, sizeof(GetStatusScriptMetaInfo));
+  getstatus_script.reset();
   exe_state = ExecutionState::GET_STATUS;
   if (clear_version_table) {
     rows.clear();
@@ -92,8 +91,6 @@ static uint8_t Numof_lengthbytes(uint8_t* read_buf, int32_t* pLen) {
    * */
   switch (len_byte) {
     case 0:
-      wLen = read_buf[0];
-      break;
     case 1:
       /*1st byte is the length*/
       wLen = read_buf[0];
@@ -123,22 +120,23 @@ static uint8_t Numof_lengthbytes(uint8_t* read_buf, int32_t* pLen) {
   return len_byte;
 }
 
-inline int SSCANF_BYTE(const char* buf, const char* format, void* pVal) {
+static inline int SSCANF_BYTE(const char* buf, const char* format, void* pVal) {
   int Result = 0;
 
   if ((NULL != buf) && (NULL != format) && (NULL != pVal)) {
     unsigned int dwVal;
-    unsigned char* pTmp = (unsigned char*)pVal;
+    unsigned char* pTmp = static_cast<unsigned char*>(pVal);
     Result = sscanf(buf, format, &dwVal);
 
-    (*pTmp) = (unsigned char)(dwVal & 0x000000FF);
+    (*pTmp) = static_cast<unsigned char>(dwVal & 0x000000FF);
   }
   return Result;
 }
 
 // Function to sort vector of LoadUpdateScriptMetaInfo by elf_version
 // (descending) and elf_base_version (descending)
-void sortScriptsByVersion(std::vector<LoadUpdateScriptMetaInfo>& scripts) {
+static void sortScriptsByVersion(
+    std::vector<LoadUpdateScriptMetaInfo>& scripts) {
   std::sort(
       scripts.begin(), scripts.end(),
       [](const LoadUpdateScriptMetaInfo& a, const LoadUpdateScriptMetaInfo& b) {
@@ -152,28 +150,29 @@ void sortScriptsByVersion(std::vector<LoadUpdateScriptMetaInfo>& scripts) {
 }
 
 // Helper function to compare two version vectors (e.g., ELFVersion)
-bool isVersionGreater(const std::vector<uint8_t>& v1,
-                      const std::vector<uint8_t>& v2) {
+static bool isVersionGreater(const std::vector<uint8_t>& v1,
+                             const std::vector<uint8_t>& v2) {
   if (v1.size() != v2.size()) return v1.size() > v2.size();
   return v1 > v2;
 }
 
 // Function to filter scripts based on conditions
-std::vector<LoadUpdateScriptMetaInfo> filterScripts(
+static std::vector<LoadUpdateScriptMetaInfo> filterScripts(
     const std::vector<LoadUpdateScriptMetaInfo>& scripts,
     SemsScriptType script_type, const std::vector<uint8_t>& applet_aid) {
   std::vector<LoadUpdateScriptMetaInfo> filtered_scripts;
   // Filter scripts by script_type and AppletAID
   std::vector<LoadUpdateScriptMetaInfo> matching_scripts;
-  for (const auto& script : scripts) {
-    if (script.script_type == script_type &&
-        script.applet_aid_partial == applet_aid) {
-      matching_scripts.push_back(script);
-    }
-  }
+  std::copy_if(scripts.begin(), scripts.end(),
+               std::back_inserter(matching_scripts),
+               [&](const LoadUpdateScriptMetaInfo& script) {
+                 return script.script_type == script_type &&
+                        script.applet_aid_partial == applet_aid;
+               });
 
   if (matching_scripts.empty()) {
-    LOG(WARNING) << "No script with script_type:" << script_type
+    LOG(WARNING) << "No script with script_type:"
+                 << static_cast<uint32_t>(script_type)
                  << " found for applet_aid: " << toString(applet_aid);
     return {};
   }
@@ -209,8 +208,8 @@ std::vector<LoadUpdateScriptMetaInfo> filterScripts(
     std::unordered_map<std::string, std::vector<LoadUpdateScriptMetaInfo>>
         base_version_groups;
     for (const auto& script : scripts_with_base) {
-      std::string base_version_str(script.elf_base_version.begin(),
-                                   script.elf_base_version.end());
+      const std::string base_version_str(script.elf_base_version.begin(),
+                                         script.elf_base_version.end());
       base_version_groups[base_version_str].push_back(script);
     }
 
@@ -220,25 +219,29 @@ std::vector<LoadUpdateScriptMetaInfo> filterScripts(
       std::unordered_map<std::string, std::vector<LoadUpdateScriptMetaInfo>>
           version_groups;
       for (const auto& script : base_group.second) {
-        std::string version_str(script.elf_version.begin(),
-                                script.elf_version.end());
+        const std::string version_str(script.elf_version.begin(),
+                                      script.elf_version.end());
         version_groups[version_str].push_back(script);
       }
 
       // Case: Check for duplicate scripts with same ELFBaseVersion and
       // ELFVersion
-      for (const auto& version_group : version_groups) {
-        if (version_group.second.size() > 1) {
-          std::string base_version_str =
-              toString(version_group.second[0].elf_base_version);
-          std::string version_str =
-              toString(version_group.second[0].elf_version);
-          LOG(ERROR) << "Duplicate scripts with ELFBaseVersion "
-                     << base_version_str << " and ELFVersion= " << version_str
-                     << " for AID: " << toString(applet_aid);
-          throw std::runtime_error(
-              "Duplicate script files with same ELFBaseVersion and ELFVersion");
-        }
+      auto ver_grp = std::find_if(
+          version_groups.begin(), version_groups.end(),
+          [](const std::pair<std::string,
+                             std::vector<LoadUpdateScriptMetaInfo>>& ver_grp) {
+            return (ver_grp.second.size() > 1);
+          });
+      if (ver_grp != version_groups.end()) {
+        const std::string base_version_str =
+            toString(ver_grp->second[0].elf_base_version);
+        const std::string version_str =
+            toString(ver_grp->second[0].elf_version);
+        LOG(ERROR) << "Duplicate scripts with ELFBaseVersion "
+                   << base_version_str << " and ELFVersion= " << version_str
+                   << " for AID: " << toString(applet_aid);
+        throw std::runtime_error(
+            "Duplicate script files with same ELFBaseVersion and ELFVersion");
       }
       // Case: Select script with the highest ELFVersion
       const LoadUpdateScriptMetaInfo* latest_script = nullptr;
@@ -259,7 +262,7 @@ std::vector<LoadUpdateScriptMetaInfo> filterScripts(
 // Filters both LOAD(if available) and UPDATE type of
 // scripts for each applet. Checks for their compatibility
 // and prepares SemsScriptInfo for given applet aid.
-std::vector<SemsScriptInfo> filterScriptsForAid(
+static std::vector<SemsScriptInfo> filterScriptsForAid(
     const std::vector<LoadUpdateScriptMetaInfo>& scripts,
     const std::vector<uint8_t>& applet_aid) {
   std::vector<LoadUpdateScriptMetaInfo> selected_update_scripts,
@@ -350,17 +353,17 @@ std::vector<SemsScriptInfo> filterScriptsForAid(
 }
 
 // Function to trim leading and trailing whitespace
-std::string trim(const std::string& str) {
-  size_t first = str.find_first_not_of(' ');
+static std::string trim(const std::string& str) {
+  const size_t first = str.find_first_not_of(' ');
   if (first == std::string::npos) return "";
-  size_t last = str.find_last_not_of(' ');
+  const size_t last = str.find_last_not_of(' ');
   return str.substr(first, last - first + 1);
 }
 
 // Parses metadata fields for all scripts available under given path
 ParseMetadataError ParseSemsScriptsMetadata(std::string script_dir_path,
                                             bool clear_version_table) {
-  std::string path = std::move(script_dir_path);
+  const std::string path = std::move(script_dir_path);
 
   DIR* dir = opendir(path.c_str());
   if (dir == nullptr) {
@@ -371,17 +374,18 @@ ParseMetadataError ParseSemsScriptsMetadata(std::string script_dir_path,
   ResetGlobalMetadataState(clear_version_table);
 
   struct dirent* entry;
-  bool parse_success = true;
   struct stat sb;
 
   while ((entry = readdir(dir)) != nullptr) {
-    std::string name = entry->d_name;
+    const std::string name = entry->d_name;
     if (name == "." || name == "..") continue;
-    std::string fullPath = path + "/" + name;
+    std::string fullPath = path;
+    fullPath.append("/").append(name);
     if (stat(fullPath.c_str(), &sb) == 0 && !(sb.st_mode & S_IFDIR)) {
-      ParseMetadataError result = ParseSemsMetadata(fullPath.c_str());
+      const ParseMetadataError result = ParseSemsMetadata(fullPath.c_str());
       if (result != ParseMetadataError::SUCCESS) {
-        LOG(ERROR) << "Error" << result << " parsing: " << path;
+        LOG(ERROR) << "Error" << static_cast<uint32_t>(result)
+                   << " parsing: " << path;
         closedir(dir);
         return result;
       }
@@ -400,14 +404,17 @@ ParseMetadataError ParseSemsScriptsMetadata(std::string script_dir_path,
 // Filters all script based on
 // 1. chip type
 // 2. compatible/valid script based on target and base version for each applet
-ParseMetadataError FilterScripts(std::vector<uint8_t>& chip_type) {
+ParseMetadataError FilterScripts(const std::vector<uint8_t>& chip_type) {
   // find corresponding platformID
   PlatformID p_id = PlatformID::INVALID;
-  for (const auto& item : ChipIds) {
-    if (item.first == chip_type) {
-      p_id = item.second;
-      break;
-    }
+  auto it = std::find_if(
+      ChipIds.begin(), ChipIds.end(),
+      [&](const std::pair<std::vector<uint8_t>, PlatformID>& platform_type) {
+        return platform_type.first == chip_type;
+      });
+
+  if (it != ChipIds.end()) {
+    p_id = it->second;
   }
 
   if (p_id == PlatformID::SN220_V5 &&
@@ -427,7 +434,6 @@ ParseMetadataError FilterScripts(std::vector<uint8_t>& chip_type) {
           // AMD-H based Update is not supported for SN220_V3
           LOG(WARNING)
               << "LOAD_SCRIPT Type is not supported for chiptype:SN220_V3";
-          script_invalid = true;
           return ParseMetadataError::INVALID_SEMS_TYPE;
         } else {
           script_invalid |= script.script_type == SemsScriptType::UPDATE_SCRIPT
@@ -492,16 +498,18 @@ void DisplayAllScriptsInfo() {
               << all_scripts_info[i].pre_load_required;
     LOG(INFO) << "  update_required : " << all_scripts_info[i].update_required;
 
-    if (all_scripts_info[i].load_script_exists)
+    if (all_scripts_info[i].load_script_exists) {
       LOG(INFO) << "  LOAD script path: "
                 << all_scripts_info[i].load_script.script_path;
-    else
+    } else {
       LOG(INFO) << "  LOAD script does not exist";
-    if (all_scripts_info[i].update_script_exists)
+    }
+    if (all_scripts_info[i].update_script_exists) {
       LOG(INFO) << "  UPDATE script path: "
                 << all_scripts_info[i].update_script.script_path;
-    else
+    } else {
       LOG(INFO) << "  UPDATE script does not exist";
+    }
   }
 }
 
@@ -560,7 +568,7 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
     // from the ELF AID we are updating to
     if (applet_exists) {
       auto installed_elf_aid = getstatus_response[k].associated_elf_aid;
-      for (auto matching_elf : getstatus_response[k].matching_elfs) {
+      for (const auto& matching_elf : getstatus_response[k].matching_elfs) {
         if (installed_elf_aid == matching_elf.elf_aid_complete) {
           LOG(INFO) << "Installed elf aid" << toString(installed_elf_aid);
           LOG(INFO) << "script_elf_ver:" << toString(update_script_elf_ver);
@@ -573,10 +581,8 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
           if (isVersionGreater(update_script_elf_ver, installed_elf_version)) {
             if (update_script_elf_base_ver.empty() ||
                 update_script_elf_base_ver ==
-                    std::vector<uint8_t>{0x00, 0x00}) {
-              // Scripts without ELFBaseVersion metadata field
-              update_required = true;
-            } else if (update_script_elf_base_ver == installed_elf_version) {
+                    std::vector<uint8_t>{0x00, 0x00} ||
+                update_script_elf_base_ver == installed_elf_version) {
               update_required = true;
             }
             break;
@@ -593,13 +599,16 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
       // check if ELF is already present
       // Assuming existing installed_elf_aid is different
       // from the ELF AID we are updating to
-      for (auto matching_elf : getstatus_response[k].matching_elfs) {
-        if (load_script_elf_aid == matching_elf.elf_aid_complete) {
-          LOG(INFO) << "ELF is already available in eSE: "
-                    << all_scripts_info[i].load_script.script_path;
-          load_required = false;
-          break;
-        }
+      const bool elf_already_present = std::any_of(
+          getstatus_response[k].matching_elfs.begin(),
+          getstatus_response[k].matching_elfs.end(),
+          [&](const struct MatchingELF& matching_elf) {
+            return load_script_elf_aid == matching_elf.elf_aid_complete;
+          });
+      if (elf_already_present) {
+        LOG(INFO) << "ELF is already available in eSE: "
+                  << all_scripts_info[i].load_script.script_path;
+        load_required = false;
       }
     }
     if (update_required) {
@@ -623,12 +632,12 @@ void CheckLoad_Or_UpdateRequired(bool* load_req, bool* update_req) {
 }
 
 // Local helper function to parse GetStatus script response
-void ParseResponseLocal(GetStatusResponseType resp_type,
-                        struct GetStatusResponse& temp,
-                        std::vector<uint8_t>& getstatus_resp_vec) {
+static void ParseResponseLocal(GetStatusResponseType resp_type,
+                               struct GetStatusResponse& temp,
+                               std::vector<uint8_t>& getstatus_resp_vec) {
   LOG(DEBUG) << "resp_type is " << resp_type;
   if (resp_type == GetStatusResponseType::INSTANCE_DATA) {
-    uint16_t offset = 0, total_len = 0;
+    uint16_t offset = 0;
     if (getstatus_resp_vec[offset] == 0xE3) {
       LOG(DEBUG) << "parsing first type of response";
       offset = offset + 2;
@@ -640,8 +649,8 @@ void ParseResponseLocal(GetStatusResponseType resp_type,
       if (getstatus_resp_vec[offset] == 0x4F) {
         // Complete instance AID
         offset += 1;
-        uint16_t aid_len = getstatus_resp_vec[offset];
-        std::vector<uint8_t> instance_aid_complete(
+        const uint16_t aid_len = getstatus_resp_vec[offset];
+        const std::vector<uint8_t> instance_aid_complete(
             &(getstatus_resp_vec[offset + 1]),
             &(getstatus_resp_vec[offset + 1]) + aid_len);
         offset = offset + 1 + aid_len;
@@ -650,8 +659,8 @@ void ParseResponseLocal(GetStatusResponseType resp_type,
         temp.instance_aid_complete = instance_aid_complete;
       } else if (getstatus_resp_vec[offset] == 0xC4) {
         offset += 1;
-        uint16_t associated_elf_aid_len = getstatus_resp_vec[offset];
-        std::vector<uint8_t> associated_elf_aid(
+        const uint16_t associated_elf_aid_len = getstatus_resp_vec[offset];
+        const std::vector<uint8_t> associated_elf_aid(
             &(getstatus_resp_vec[offset + 1]),
             &(getstatus_resp_vec[offset + 1]) + associated_elf_aid_len);
         offset = offset + 1 + associated_elf_aid_len;
@@ -673,18 +682,19 @@ void ParseResponseLocal(GetStatusResponseType resp_type,
     while (offset < getstatus_resp_vec.size() - 4) {
       if (getstatus_resp_vec[offset] == 0xE3) {
         struct MatchingELF matching_elf;
-        memset(&matching_elf, 0, sizeof(struct MatchingELF));
+        // memset(&matching_elf, 0, sizeof(struct MatchingELF));
+        matching_elf.reset();
         LOG(DEBUG) << "parse E3 Tag";
         offset += 1;
-        uint16_t tagE3Len = getstatus_resp_vec[offset];
+        const uint16_t tagE3Len = getstatus_resp_vec[offset];
         offset += 1;
-        uint16_t current_offset = offset;
+        const uint16_t current_offset = offset;
         while ((offset - current_offset) < (tagE3Len)) {
           if (getstatus_resp_vec[offset] == 0x4F) {
             LOG(DEBUG) << "parse 4F Tag";
             offset += 1;
-            uint16_t elf_aid_len = getstatus_resp_vec[offset];
-            std::vector<uint8_t> elf_aid_complete(
+            const uint16_t elf_aid_len = getstatus_resp_vec[offset];
+            const std::vector<uint8_t> elf_aid_complete(
                 &(getstatus_resp_vec[offset + 1]),
                 &(getstatus_resp_vec[offset + 1]) + elf_aid_len);
             offset += elf_aid_len + 1;
@@ -693,8 +703,8 @@ void ParseResponseLocal(GetStatusResponseType resp_type,
           } else if (getstatus_resp_vec[offset] == 0x84) {
             LOG(DEBUG) << "parse module AIDs";
             offset += 1;
-            uint16_t module_aid_len = getstatus_resp_vec[offset];
-            std::vector<uint8_t> module_aid_complete(
+            const uint16_t module_aid_len = getstatus_resp_vec[offset];
+            const std::vector<uint8_t> module_aid_complete(
                 &(getstatus_resp_vec[offset + 1]),
                 &(getstatus_resp_vec[offset + 1]) + module_aid_len);
             LOG(DEBUG) << "module_aid: " << toString(module_aid_complete);
@@ -703,8 +713,8 @@ void ParseResponseLocal(GetStatusResponseType resp_type,
           } else if (getstatus_resp_vec[offset] == 0xCE) {
             LOG(DEBUG) << "parse ELF version";
             offset += 1;
-            uint16_t elf_ver_len = getstatus_resp_vec[offset];
-            std::vector<uint8_t> elf_version(
+            const uint16_t elf_ver_len = getstatus_resp_vec[offset];
+            const std::vector<uint8_t> elf_version(
                 &(getstatus_resp_vec[offset + 1]),
                 &(getstatus_resp_vec[offset + 1]) + elf_ver_len);
             LOG(DEBUG) << "elf_version: " << toString(elf_version);
@@ -733,26 +743,28 @@ bool ParseResponse(uint8_t* respBuffer, int32_t respBuffersize) {
     }
     std::vector<uint8_t> resp_vec(respBuffer, respBuffer + respBuffersize);
     LOG(DEBUG) << "getstatus_response size is: " << getstatus_response.size();
-    for (auto& current_entry : getstatus_response) {
-      // parse response for application data Tag: E3-4F-84-CE
-      if (!current_entry.matching_elf_data_recvd) {
-        if (!current_entry.instance_data_recvd) {
-          applet_exists = false;
-        }
-        // Look for matching ELFs
-        ParseResponseLocal(GetStatusResponseType::MATCHING_ELF_DATA,
-                           current_entry, resp_vec);
-        current_entry.matching_elf_data_recvd = true;
-        response_processed = true;
-        break;
+    auto current_entry =
+        std::find_if(getstatus_response.begin(), getstatus_response.end(),
+                     [](const GetStatusResponse& resp) {
+                       return !resp.matching_elf_data_recvd;
+                     });
+    if (current_entry != getstatus_response.end()) {
+      if (!current_entry->instance_data_recvd) {
+        applet_exists = false;
       }
+      // Look for matching ELFs
+      ParseResponseLocal(GetStatusResponseType::MATCHING_ELF_DATA,
+                         *current_entry, resp_vec);
+      current_entry->matching_elf_data_recvd = true;
+      response_processed = true;
     }
+
     if (!response_processed) {
       // parse response for application data E3 Tag - 4FC4
       if (getstatus_response.size() <
           getstatus_script.applet_aids_partial.size()) {
-        struct GetStatusResponse temp;
-        memset(&temp, 0, sizeof(struct GetStatusResponse));
+        struct GetStatusResponse temp{};
+        // memset(&temp, 0, sizeof(struct GetStatusResponse));
         if (applet_exists) {
           ParseResponseLocal(GetStatusResponseType::INSTANCE_DATA, temp,
                              resp_vec);
@@ -761,7 +773,6 @@ bool ParseResponse(uint8_t* respBuffer, int32_t respBuffersize) {
         temp.applet_aid_partial =
             getstatus_script.applet_aids_partial[getstatus_response.size()];
         temp.matching_elf_data_recvd = false;
-        response_processed = true;
         getstatus_response.push_back(temp);
       }
     }
@@ -786,8 +797,8 @@ void SetScriptExecutionState(ExecutionState script_exe_state) {
 
 // Local helper function to parse Authentication frame signature
 // AuthFrame signature uniquely identifies a given sems script
-void ParseAuthFrameSignature(const std::string& auth_frame_string,
-                             std::vector<uint8_t>& auth_frame_sign) {
+static void ParseAuthFrameSignature(const std::string& auth_frame_string,
+                                    std::vector<uint8_t>& auth_frame_sign) {
   uint8_t read_byte;
   const uint16_t size_ePK_SP_ENC = 65;
   const uint16_t size_E_K_K1 = 16;
@@ -822,7 +833,7 @@ void ParseAuthFrameSignature(const std::string& auth_frame_string,
 }
 
 // Checks and throws error for duplicate metadata entry
-bool IsDuplicateEntry(auto& metafields, std::string fieldtype) {
+static bool IsDuplicateEntry(auto& metafields, const std::string& fieldtype) {
   if (metafields.find(fieldtype) == metafields.end()) {
     metafields[fieldtype] = true;
     return false;
@@ -833,8 +844,8 @@ bool IsDuplicateEntry(auto& metafields, std::string fieldtype) {
 }
 
 // Verifies the presence of mandatory metadata fields
-bool mandatoryMetaFieldsPresent(const auto& available_metafields,
-                                const auto& mandatory_fields) {
+static bool mandatoryMetaFieldsPresent(const auto& available_metafields,
+                                       const auto& mandatory_fields) {
   for (const auto& item : mandatory_fields) {
     auto search = available_metafields.find(item);
     if (search == available_metafields.end() || search->second != true) {
@@ -847,7 +858,7 @@ bool mandatoryMetaFieldsPresent(const auto& available_metafields,
 }
 
 // Helper function to convert Hex string to byte array
-std::vector<uint8_t> hexStringtoBytes(const auto& hex_string) {
+static std::vector<uint8_t> hexStringtoBytes(const auto& hex_string) {
   uint8_t read_buf = 0x00;
   std::vector<uint8_t> result;
   for (int x = 0; x < hex_string.size();) {
@@ -918,7 +929,7 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
     } else if (line.rfind("7f21", 0) == 0) {
       script_start_offset = line_start_offset;
     } else if (line.rfind("60", 0) == 0) {
-      std::string key = "AUTH_FRAME" + std::to_string(auth_frame_number);
+      const std::string key = "AUTH_FRAME" + std::to_string(auth_frame_number);
       auth_frame_number++;
       trim(line);
       metadata.push_back(
@@ -933,21 +944,22 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
   }
 
   SemsScriptType script_type = INVALID_SCRIPT;
+
   // Find script type first
-  for (const auto& entry : metadata) {
-    if (entry.first == "SEMSType") {
-      uint8_t current_byte;
-      SSCANF_BYTE(entry.second.first.c_str(), "%2X", &current_byte);
-      script_type = (SemsScriptType)current_byte;
-      break;
-    }
+  auto sems_script_type = std::find_if(
+      metadata.begin(), metadata.end(),
+      [](const std::pair<std::string, std::pair<std::string, std::streampos>>&
+             entry) { return entry.first == "SEMSType"; });
+  if (sems_script_type != metadata.end()) {
+    uint8_t current_byte;
+    SSCANF_BYTE(sems_script_type->second.first.c_str(), "%2X", &current_byte);
+    script_type = static_cast<SemsScriptType>(current_byte);
   }
 
   std::unordered_map<std::string, bool> load_update_script_metafields;
   std::unordered_map<std::string, bool> getstatus_script_metafields;
 
-  struct LoadUpdateScriptMetaInfo load_update_script_temp;
-  memset(&load_update_script_temp, 0, sizeof(struct LoadUpdateScriptMetaInfo));
+  struct LoadUpdateScriptMetaInfo load_update_script_temp{};
 
   for (const auto& entry : metadata) {
     if (script_type == SemsScriptType::LOAD_SCRIPT ||
@@ -1003,10 +1015,10 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
         load_update_script_temp.script_path = path;
       }
       if (!key.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
-        std::string auth_frame_string = value.first;
-        std::streampos script_offset = value.second;
+        const std::string auth_frame_string = value.first;
+        const std::streampos script_offset = value.second;
         std::vector<uint8_t> auth_frame_sign;
-        ParseAuthFrameSignature(std::move(auth_frame_string), auth_frame_sign);
+        ParseAuthFrameSignature(auth_frame_string, auth_frame_sign);
         load_update_script_temp.signatures.push_back(
             std::make_pair(auth_frame_sign, script_offset));
       }
@@ -1027,10 +1039,9 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
             hexStringtoBytes(value.first));
       }
       if (!key.compare(0, strlen("AUTH_FRAME"), "AUTH_FRAME")) {
-        std::string auth_frame_string = value.first;
+        const std::string auth_frame_string = value.first;
         std::vector<uint8_t> auth_frame_signature;
-        ParseAuthFrameSignature(std::move(auth_frame_string),
-                                auth_frame_signature);
+        ParseAuthFrameSignature(auth_frame_string, auth_frame_signature);
         getstatus_script.signature = auth_frame_signature;
       }
     }
@@ -1054,37 +1065,4 @@ ParseMetadataError ParseSemsMetadata(const char* path) {
     return ParseMetadataError::INVALID_SEMS_TYPE;
   }
   return ParseMetadataError::SUCCESS;
-}
-
-void PrintAllParsedMetadata() {
-  LOG(INFO) << "Display parsed GETSTATUS scripts info";
-  LOG(INFO) << "script_type:" << getstatus_script.script_type;
-  LOG(INFO) << "script_path:" << getstatus_script.script_path;
-  LOG(INFO) << "signature:" << toString(getstatus_script.signature);
-  for (int i = 0; i < getstatus_script.applet_aids_partial.size(); i++) {
-    LOG(INFO) << "AID: " << toString(getstatus_script.applet_aids_partial[i]);
-  }
-
-  LOG(INFO) << "Display parsed update scripts info";
-  LOG(INFO) << "=======================================================";
-  for (int i = 0; i < load_update_script.size(); i++) {
-    LOG(INFO) << "script_path: " << load_update_script[i].script_path;
-    LOG(INFO) << "script_type: " << load_update_script[i].script_type;
-    LOG(INFO) << "applet_aid_partial:"
-              << toString(load_update_script[i].applet_aid_partial);
-    LOG(INFO) << "elf_aid_complete:"
-              << toString(load_update_script[i].elf_aid_complete);
-    LOG(INFO) << "elf_version:" << toString(load_update_script[i].elf_version);
-    for (int count = 0; count < load_update_script[i].signatures.size();
-         count++) {
-      LOG(INFO) << "signature_" << count << ": "
-                << toString(load_update_script[i].signatures[count].first);
-      LOG(INFO) << "offset_" << count << ": "
-                << load_update_script[i].signatures[count].second;
-    }
-    LOG(INFO) << "PlatformID: " << std::hex << std::setw(2) << std::setfill('0')
-              << (load_update_script[i].platform_id & 0xFF);
-    LOG(INFO) << "";
-  }
-  LOG(INFO) << "=======================================================";
 }

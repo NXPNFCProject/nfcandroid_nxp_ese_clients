@@ -24,7 +24,6 @@
 #include <SEConnection.h>
 
 using se_update_agent::HalToHalTransport;
-using se_update_agent::ITransport;
 using se_update_agent::OmapiTransport;
 
 bool SEConnection::initialize() { return transport_->openConnection(); }

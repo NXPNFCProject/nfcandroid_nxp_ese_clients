@@ -60,7 +60,7 @@ class ITransport {
   /**
    * Opens Logical Channel.
    */
-  virtual bool openChannel(std::vector<uint8_t>& aid, int8_t& channel_num,
+  virtual bool openChannel(const std::vector<uint8_t>& aid, int8_t& channel_num,
                            std::vector<uint8_t>& select_resp) = 0;
 
   /**

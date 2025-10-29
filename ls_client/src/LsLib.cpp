@@ -31,32 +31,30 @@
 #undef LOG_TAG
 #define LOG_TAG "LsLib"
 
-const char* LibSWVersion = "v1.0";
-pLsc_Dwnld_Context_t gpLsc_Dwnld_Context = NULL;
+static const char* LibSWVersion = "v1.0";
+static pLsc_Dwnld_Context_t gpLsc_Dwnld_Context = NULL;
 static int32_t gTransceiveTimeout = 120000;
-bool mIsLSLibInitialised;
-uint8_t Select_Rsp[1024];
-uint8_t Jsbl_RefKey[256];
-uint8_t Jsbl_keylen;
-uint8_t StoreData[22];
-int Select_Rsp_Len;
-uint8_t lsVersionArr[2];
-uint8_t tag42Arr[17];
-uint8_t tag45Arr[9];
-uint8_t lsExecuteResp[4];
-uint8_t AID_ARRAY[22];
-int32_t resp_len = 0;
-FILE* fAID_MEM = NULL;
-FILE* fLS_STATUS = NULL;
-uint8_t lsGetStatusArr[2];
-phNxpLs_data cmdApdu;
-phNxpLs_data rspApdu;
+static bool mIsLSLibInitialised;
+static uint8_t Select_Rsp[1024];
+static uint8_t Jsbl_RefKey[256];
+static uint8_t Jsbl_keylen;
+static uint8_t StoreData[22];
+static int Select_Rsp_Len;
+static uint8_t lsVersionArr[2];
+static uint8_t tag42Arr[17];
+static uint8_t tag45Arr[9];
+static uint8_t lsExecuteResp[4];
+static uint8_t AID_ARRAY[22];
+static int32_t resp_len = 0;
+static FILE* fAID_MEM = NULL;
+static FILE* fLS_STATUS = NULL;
+static uint8_t lsGetStatusArr[2];
 static UpdaterConfig updaterCfg;
 
 static tLSC_STATUS LSC_Transceive(phNxpLs_data* pCmd, phNxpLs_data* pRsp);
-tLSC_STATUS (*Applet_load_seqhandler[])(Lsc_ImageInfo_t* pContext,
-                                        tLSC_STATUS status,
-                                        Lsc_TranscieveInfo_t* pInfo) = {
+static tLSC_STATUS (*Applet_load_seqhandler[])(Lsc_ImageInfo_t* pContext,
+                                               tLSC_STATUS status,
+                                               Lsc_TranscieveInfo_t* pInfo) = {
     LSC_OpenChannel, LSC_SelectLsc, LSC_StoreData, LSC_loadapplet, NULL};
 
 /*******************************************************************************
@@ -80,10 +78,12 @@ bool initialize (IChannel_t* channel)
     updaterCfg = {
         .updater_kind = SemsUpdaterKind::SEMS_MAIN,
     };
-    gpLsc_Dwnld_Context = (pLsc_Dwnld_Context_t)malloc(sizeof(Lsc_Dwnld_Context_t));
+    gpLsc_Dwnld_Context =
+        static_cast<pLsc_Dwnld_Context_t>(malloc(sizeof(Lsc_Dwnld_Context_t)));
     if(gpLsc_Dwnld_Context != NULL)
     {
-        memset((void *)gpLsc_Dwnld_Context, 0, (uint32_t)sizeof(Lsc_Dwnld_Context_t));
+      memset(static_cast<void*>(gpLsc_Dwnld_Context), 0,
+             static_cast<uint32_t>(sizeof(Lsc_Dwnld_Context_t)));
     }
     else
     {
@@ -140,10 +140,8 @@ void finalize() {
 *******************************************************************************/
 tLSC_STATUS LsLib_SelectSemsAID() {
   ALOGD("%s: enter", __FUNCTION__);
-  Lsc_ImageInfo_t* update_info =
-      (Lsc_ImageInfo_t*)&gpLsc_Dwnld_Context->Image_info;
-  Lsc_TranscieveInfo_t* trans_info =
-      (Lsc_TranscieveInfo_t*)&gpLsc_Dwnld_Context->Transcv_Info;
+  Lsc_ImageInfo_t* update_info = &gpLsc_Dwnld_Context->Image_info;
+  Lsc_TranscieveInfo_t* trans_info = &gpLsc_Dwnld_Context->Transcv_Info;
   tLSC_STATUS status = STATUS_FAILED;
 
   status = LSC_OpenChannel(update_info, status, trans_info);
@@ -167,21 +165,21 @@ tLSC_STATUS LsLib_SendCmd(uint8_t ins, uint8_t p2, std::vector<uint8_t>& resp) {
   tLSC_STATUS status = STATUS_FAILED;
   phNxpLs_data cmdApdu;
   phNxpLs_data rspApdu;
-  int32_t xx = 0, len = 0;
+  int32_t xx = 0;
   ALOGD("%s: enter", fn);
 
   phLS_memset(&cmdApdu, 0x00, sizeof(phNxpLs_data));
   phLS_memset(&rspApdu, 0x00, sizeof(phNxpLs_data));
   // cmdApdu.len = (int32_t)(5 + sizeof(StoreData));
   cmdApdu.len = 5;
-  Lsc_ImageInfo_t* update_info =
-      (Lsc_ImageInfo_t*)&(gpLsc_Dwnld_Context->Image_info);
-  cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+  Lsc_ImageInfo_t* update_info = &(gpLsc_Dwnld_Context->Image_info);
+  cmdApdu.p_data =
+      static_cast<uint8_t*>(phLS_memalloc(cmdApdu.len * sizeof(uint8_t)));
   if (cmdApdu.p_data == NULL) {
     ALOGE("Failed to allocate memory for cmd apdu");
     return STATUS_FAILED;
   }
-  int channel_id = update_info->Channel_Info[0].channel_id;
+  const int channel_id = update_info->Channel_Info[0].channel_id;
 
   ALOGD("Channel ID is %d", channel_id);
 
@@ -221,10 +219,8 @@ tLSC_STATUS LsLib_SendCmd(uint8_t ins, uint8_t p2, std::vector<uint8_t>& resp) {
 *******************************************************************************/
 tLSC_STATUS LsLib_SemsDeSelect() {
   ALOGE("%s: ENTER", __FUNCTION__);
-  Lsc_ImageInfo_t* update_info =
-      (Lsc_ImageInfo_t*)&(gpLsc_Dwnld_Context->Image_info);
-  Lsc_TranscieveInfo_t* trans_info =
-      (Lsc_TranscieveInfo_t*)&(gpLsc_Dwnld_Context->Transcv_Info);
+  Lsc_ImageInfo_t* update_info = &(gpLsc_Dwnld_Context->Image_info);
+  Lsc_TranscieveInfo_t* trans_info = &(gpLsc_Dwnld_Context->Transcv_Info);
   tLSC_STATUS status = STATUS_FAILED;
   status = LSC_CloseChannel(update_info, status, trans_info);
   finalize();
@@ -243,7 +239,7 @@ tLSC_STATUS LsLib_SemsDeSelect() {
 *******************************************************************************/
 tLSC_STATUS Perform_LSC(const char* name, const char* dest,
                         std::streampos start_offset, const uint8_t* pdata,
-                        uint16_t len, uint8_t* respSW) {
+                        uint16_t len) {
   static const char fn[] = "Perform_LSC";
   tLSC_STATUS status = STATUS_FAILED;
   ALOGD("%s: enter; sha-len=%d", fn, len);
@@ -263,7 +259,6 @@ tLSC_STATUS Perform_LSC(const char* name, const char* dest,
       lsExecuteResp[2] = LS_ABORT_SW1;
       lsExecuteResp[3] = LS_ABORT_SW2;
     }
-    memcpy(&respSW[0], &lsExecuteResp[0], 4);
     ALOGD("%s: lsExecuteScript Response SW=%2x%2x", fn, lsExecuteResp[2],
           lsExecuteResp[3]);
   }
@@ -287,9 +282,9 @@ tLSC_STATUS LSC_update_seq_handler(
   static const char fn[] = "LSC_update_seq_handler";
   uint16_t seq_counter = 0;
   Lsc_ImageInfo_t update_info =
-      (Lsc_ImageInfo_t)gpLsc_Dwnld_Context->Image_info;
+      static_cast<Lsc_ImageInfo_t>(gpLsc_Dwnld_Context->Image_info);
   Lsc_TranscieveInfo_t trans_info =
-      (Lsc_TranscieveInfo_t)gpLsc_Dwnld_Context->Transcv_Info;
+      static_cast<Lsc_TranscieveInfo_t>(gpLsc_Dwnld_Context->Transcv_Info);
   tLSC_STATUS status = STATUS_FAILED;
   ALOGD("%s: enter", fn);
 
@@ -306,8 +301,8 @@ tLSC_STATUS LSC_update_seq_handler(
   // memcpy(update_info.fls_path, (char*)Lsc_path, sizeof(Lsc_path));
   strlcat(update_info.fls_path, name, sizeof(update_info.fls_path));
   ALOGD("Start execution of script: %s", update_info.fls_path);
-  update_info.fls_start_offset = static_cast<long long>(start_offset);
-  ALOGD("Start offset: %lld", update_info.fls_start_offset);
+  update_info.fls_start_offset = static_cast<int64_t>(start_offset);
+  ALOGD("Start offset: %ld", update_info.fls_start_offset);
   while ((seq_handler[seq_counter]) != NULL) {
     status = STATUS_FAILED;
     status = (*(seq_handler[seq_counter]))(&update_info, status, &trans_info);
@@ -334,8 +329,8 @@ tLSC_STATUS LSC_update_seq_handler(
 tLSC_STATUS LSC_OpenChannel(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
                             Lsc_TranscieveInfo_t* pTranscv_Info) {
   static const char fn[] = "LSC_OpenChannel";
-  tLSC_STATUS transStat = STATUS_FAILED;
 #ifdef NXP_BOOTTIME_UPDATE
+  tLSC_STATUS transStat;
   phNxpLs_data cmdApdu;
   phNxpLs_data rspApdu;
   ALOGD("%s: enter", fn);
@@ -375,6 +370,8 @@ tLSC_STATUS LSC_OpenChannel(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     phLS_free(cmdApdu.p_data);
   }
 #else
+  (void)Os_info;
+  (void)pTranscv_Info;
   status = STATUS_SUCCESS;
 #endif
   ALOGD("%s: exit; status=0x%x", fn, status);
@@ -393,7 +390,6 @@ tLSC_STATUS LSC_OpenChannel(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
 tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
                           Lsc_TranscieveInfo_t* pTranscv_Info) {
   static const char fn[] = "LSC_SelectLsc";
-  tLSC_STATUS transStat = STATUS_FAILED;
   phNxpLs_data cmdApdu;
   phNxpLs_data rspApdu;
   unsigned long semsPresent = 1;
@@ -411,21 +407,23 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
 #endif
     if (semsPresent) {
       if (Os_info->isUpdaterMode) {
-        cmdApdu.len = (int32_t)(AID_ARRAY[0]);
+        cmdApdu.len = static_cast<int32_t>(AID_ARRAY[0]);
         ALOGD("UpdaterMode AID is: %s",
               toString(std::vector<uint8_t>(&AID_ARRAY[2],
                                             (&AID_ARRAY[2] + cmdApdu.len - 1)))
                   .c_str());
-        cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+        cmdApdu.p_data =
+            static_cast<uint8_t*>(phLS_memalloc(cmdApdu.len * sizeof(uint8_t)));
         cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
         memcpy(&(cmdApdu.p_data[1]), &AID_ARRAY[2], cmdApdu.len - 1);
         Os_info->isUpdaterMode = false;
         updaterCfg.updater_kind = SemsUpdaterKind::SEMS_UPDATER;
       } else {
         ALOGE("Select AID: %s", ARR_AS_STRING(SelectSEMS).c_str());
-        cmdApdu.len =
-            (int32_t)(sizeof(SelectSEMS) + 1 /* 1 byte for channel id*/);
-        cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+        cmdApdu.len = static_cast<int32_t>(sizeof(SelectSEMS) +
+                                           1 /* 1 byte for channel id*/);
+        cmdApdu.p_data =
+            static_cast<uint8_t*>(phLS_memalloc(cmdApdu.len * sizeof(uint8_t)));
         cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
         memcpy(&(cmdApdu.p_data[1]), SelectSEMS, sizeof(SelectSEMS));
         updaterCfg.updater_kind = SemsUpdaterKind::SEMS_MAIN;
@@ -442,7 +440,7 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
 #endif
     ALOGD("%s: Calling Secure Element Transceive with Loader service AID", fn);
 
-    transStat = LSC_Transceive(&cmdApdu, &rspApdu);
+    tLSC_STATUS transStat = LSC_Transceive(&cmdApdu, &rspApdu);
 
     if (transStat != STATUS_SUCCESS && (rspApdu.len == 0x00)) {
       status = STATUS_FAILED;
@@ -452,7 +450,7 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
 #ifdef NXP_BOOTTIME_UPDATE
       status = Process_SelectRsp(&rspApdu.p_data[0], (rspApdu.len - 2));
 #else
-      uint8_t cnt = Os_info->channel_cnt;
+      const uint8_t cnt = Os_info->channel_cnt;
       Os_info->Channel_Info[cnt].channel_id = rspApdu.p_data[0];
       ALOGD("Channel_cnt = %d channel_id= %d", cnt,
             Os_info->Channel_Info[cnt].channel_id);
@@ -481,8 +479,9 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
       phLS_free(cmdApdu.p_data);
       ALOGE("Main SEMS AID Selection failed. Try with SEMSUpdater AID: %s",
             ARR_AS_STRING(SelectSEMSUpdater).c_str());
-      cmdApdu.len = (int32_t)(sizeof(SelectSEMSUpdater) + 1);
-      cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+      cmdApdu.len = static_cast<int32_t>(sizeof(SelectSEMSUpdater) + 1);
+      cmdApdu.p_data =
+          static_cast<uint8_t*>(phLS_memalloc(cmdApdu.len * sizeof(uint8_t)));
       cmdApdu.p_data[0] = Os_info->Channel_Info[0].channel_id;
       memcpy(&(cmdApdu.p_data[1]), SelectSEMSUpdater, sizeof(SelectSEMSUpdater));
       transStat = LSC_Transceive(&cmdApdu, &rspApdu);
@@ -496,7 +495,7 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
 #ifdef NXP_BOOTTIME_UPDATE
         status = Process_SelectRsp(rspApdu.p_data, (rspApdu.len - 2));
 #else
-        uint8_t cnt = Os_info->channel_cnt;
+        const uint8_t cnt = Os_info->channel_cnt;
         Os_info->Channel_Info[cnt].channel_id = rspApdu.p_data[0];
         Os_info->Channel_Info[cnt].isOpend = true;
         Os_info->channel_cnt++;
@@ -536,19 +535,19 @@ tLSC_STATUS LSC_SelectLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
 tLSC_STATUS LSC_StoreData(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
                           Lsc_TranscieveInfo_t* pTranscv_Info) {
   static const char fn[] = "LSC_StoreData";
-  tLSC_STATUS transStat = STATUS_FAILED;
   phNxpLs_data cmdApdu;
   phNxpLs_data rspApdu;
-  int32_t xx = 0, len = 0;
   ALOGD("%s: enter", fn);
   if (Os_info == NULL || pTranscv_Info == NULL) {
     ALOGD("%s: Invalid parameter", fn);
   } else {
     phLS_memset(&cmdApdu, 0x00, sizeof(phNxpLs_data));
     phLS_memset(&rspApdu, 0x00, sizeof(phNxpLs_data));
-    cmdApdu.len = (int32_t)(5 + sizeof(StoreData));
-    cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+    cmdApdu.len = static_cast<int32_t>(5 + sizeof(StoreData));
+    cmdApdu.p_data =
+        static_cast<uint8_t*>(phLS_memalloc(cmdApdu.len * sizeof(uint8_t)));
 
+    int32_t xx = 0, len = 0;
     len = StoreData[1] + 2;  //+2 offset is for tag value and length byte
     cmdApdu.p_data[xx++] =
         STORE_DATA_CLA | (Os_info->Channel_Info[0].channel_id);
@@ -559,7 +558,7 @@ tLSC_STATUS LSC_StoreData(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     memcpy(&(cmdApdu.p_data[xx]), StoreData, len);
 
     ALOGD("%s: Calling Secure Element Transceive", fn);
-    transStat = LSC_Transceive(&cmdApdu, &rspApdu);
+    const tLSC_STATUS transStat = LSC_Transceive(&cmdApdu, &rspApdu);
     phLS_free(cmdApdu.p_data);
     if ((transStat != STATUS_SUCCESS) && (rspApdu.len == 0x00)) {
       status = STATUS_FAILED;
@@ -627,7 +626,7 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     goto exit;
   }
   Os_info->fls_size = ftell(Os_info->fp);
-  ALOGE("fls_size=%d", Os_info->fls_size);
+  ALOGE("fls_size=%ld", Os_info->fls_size);
   if (Os_info->fls_size < 0) {
     ALOGE("Error ftelling file %s", strerror(errno));
     goto exit;
@@ -646,7 +645,6 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     goto exit;
   }
   while (!feof(Os_info->fp) && (Os_info->bytes_read < Os_info->fls_size)) {
-    len_byte = 0x00;
     offset = 0;
     /*Check if the certificate/ is verified or not*/
     memset(temp_buf, 0, sizeof(temp_buf));
@@ -655,7 +653,7 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     if (status != STATUS_OKAY) {
       ALOGE("%s; LSC_ReadScript returned failure", fn);
       goto exit;
-    } else if (status == STATUS_OKAY) {
+    } else {
       /*Reset the flag in case further commands exists*/
       reachEOFCheck = false;
     }
@@ -741,10 +739,11 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
           ALOGE("%s; Next Tag has to TAG 60 not found", fn);
           goto exit;
         }
-        if (temp_buf[offset] == TAG_JSBL_HDR_ID)
+        if (temp_buf[offset] == TAG_JSBL_HDR_ID) {
           continue;
-        else
+        } else {
           goto exit;
+        }
       }
     } else if (temp_buf[0] == 0x00) {
       ALOGE("%s: Read empty line ignore", fn);
@@ -764,7 +763,8 @@ tLSC_STATUS LSC_loadapplet(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
   }
   LSC_UpdateExeStatus(LS_SUCCESS_STATUS);
   wResult = fclose(Os_info->fp);
-  ALOGE("%s exit;End of Load Applet; status=0x%x", fn, status);
+  ALOGD("%s exit;End of Load Applet; wResult=%d, status=0x%x", fn, wResult,
+        status);
   return status;
 exit:
   wResult = fclose(Os_info->fp);
@@ -776,7 +776,7 @@ exit:
     status = STATUS_OKAY;
     LSC_UpdateExeStatus(LS_SUCCESS_STATUS);
   }
-  ALOGE("%s close fp and exit; status= 0x%X", fn, status);
+  ALOGE("%s close fp and exit; wResult=%d, status= 0x%X", fn, wResult, status);
   return status;
 }
 /*******************************************************************************
@@ -794,20 +794,21 @@ tLSC_STATUS LSC_Check_KeyIdentifier(Lsc_ImageInfo_t* Os_info,
                                     uint8_t* temp_buf, tLSC_STATUS flag,
                                     int32_t wNewLen) {
   static const char fn[] = "LSC_Check_KeyIdentifier";
-  uint16_t offset = 0x00, len_byte = 0;
+  uint16_t offset;
   status = STATUS_FAILED;
-  uint8_t read_buf[1024];
+  uint8_t read_buf[1024] = {0};
   int32_t wLen;
   uint8_t certf_found = STATUS_FAILED;
-  uint8_t sign_found = STATUS_FAILED;
   ALOGD("%s: enter", fn);
 
   while (!feof(Os_info->fp) && (Os_info->bytes_read < Os_info->fls_size)) {
     offset = 0x00;
-    wLen = 0;
     if (flag == STATUS_OKAY) {
-      /*If the 7F21 TAG is already read: After TAG 40*/
-      memcpy(read_buf, temp_buf, wNewLen);
+      /*If the 7F21 TAG is already read and available in temp_buf: After TAG
+       * 40*/
+      if (temp_buf != NULL) {
+        memcpy(read_buf, temp_buf, wNewLen);
+      }
       status = STATUS_OKAY;
       flag = STATUS_FAILED;
     } else {
@@ -837,19 +838,18 @@ tLSC_STATUS LSC_Check_KeyIdentifier(Lsc_ImageInfo_t* Os_info,
     offset = 0x00;
     wLen = 0;
     status = LSC_ReadScript(Os_info, read_buf);
-    if (status != STATUS_OKAY)
+    if (status != STATUS_OKAY) {
       return status;
-    else
+    } else {
       status = STATUS_FAILED;
-
-    if ((read_buf[offset] == TAG_JSBL_HDR_ID) &&
-        (certf_found != STATUS_FAILED) && (sign_found != STATUS_OKAY))
+    }
+    if ((read_buf[offset] == TAG_JSBL_HDR_ID) && (certf_found != STATUS_FAILED))
 
     {
       // TODO check the SElect cmd response and return status accordingly
       ALOGD("TAGID: TAG_JSBL_HDR_ID");
       offset = offset + 1;
-      len_byte = Numof_lengthbytes(&read_buf[offset], &wLen);
+      uint16_t len_byte = Numof_lengthbytes(&read_buf[offset], &wLen);
       offset = offset + len_byte;
       if (read_buf[offset] == TAG_SIGNATURE_ID) {
         offset = offset + 1;
@@ -872,7 +872,7 @@ tLSC_STATUS LSC_Check_KeyIdentifier(Lsc_ImageInfo_t* Os_info,
         if (status != STATUS_OKAY) {
           return status;
         } else {
-          sign_found = STATUS_OKAY;
+          ALOGI("Script certificate verified successfully");
         }
       }
     } else if (read_buf[offset] != TAG_JSBL_HDR_ID) {
@@ -897,7 +897,7 @@ tLSC_STATUS LSC_Check_KeyIdentifier(Lsc_ImageInfo_t* Os_info,
 tLSC_STATUS LSC_ReadScript(Lsc_ImageInfo_t* Os_info, uint8_t* read_buf) {
   static const char fn[] = "LSC_ReadScript";
   int32_t wCount, wLen, wIndex = 0;
-  uint8_t len_byte = 0;
+  uint8_t len_byte;
   int wResult = 0;
   tLSC_STATUS status = STATUS_FAILED;
   int32_t lenOff = 1;
@@ -906,7 +906,8 @@ tLSC_STATUS LSC_ReadScript(Lsc_ImageInfo_t* Os_info, uint8_t* read_buf) {
   ALOGD("%s: enter", fn);
 
   for (wCount = 0; (wCount < 2 && !feof(Os_info->fp)); wCount++, wIndex++) {
-    wResult = FSCANF_BYTE(Os_info->fp, "%2X", (unsigned int*)&read_buf[wIndex]);
+    wResult = FSCANF_BYTE(Os_info->fp, "%2X",
+                          static_cast<uint8_t*>(&read_buf[wIndex]));
 
     if(wResult == 0)
     {
@@ -943,8 +944,8 @@ tLSC_STATUS LSC_ReadScript(Lsc_ImageInfo_t* Os_info, uint8_t* read_buf) {
 
   if ((read_buf[0] == 0x7f) && (read_buf[1] == 0x21)) {
     for (wCount = 0; (wCount < 1 && !feof(Os_info->fp)); wCount++, wIndex++) {
-      wResult =
-          FSCANF_BYTE(Os_info->fp, "%2X", (unsigned int*)&read_buf[wIndex]);
+      wResult = FSCANF_BYTE(Os_info->fp, "%2X",
+                            static_cast<uint8_t*>(&read_buf[wIndex]));
     }
     if (wResult == 0) {
       ALOGE("%s: Exit Read Script failed in 7F21 ", fn);
@@ -970,7 +971,6 @@ tLSC_STATUS LSC_ReadScript(Lsc_ImageInfo_t* Os_info, uint8_t* read_buf) {
 
   if (read_buf[lenOff] == 0x00) {
     ALOGE("Invalid length zero");
-    len_byte = 0x00;
     return STATUS_FAILED;
   } else if ((read_buf[lenOff] & 0x80) == 0x80) {
     len_byte = read_buf[lenOff] & 0x0F;
@@ -980,8 +980,8 @@ tLSC_STATUS LSC_ReadScript(Lsc_ImageInfo_t* Os_info, uint8_t* read_buf) {
 
     if (len_byte == 0x02) {
       for (wCount = 0; (wCount < 1 && !feof(Os_info->fp)); wCount++, wIndex++) {
-        wResult =
-            FSCANF_BYTE(Os_info->fp, "%2X", (unsigned int*)&read_buf[wIndex]);
+        wResult = FSCANF_BYTE(Os_info->fp, "%2X",
+                              static_cast<uint8_t*>(&read_buf[wIndex]));
       }
       if (wResult == 0) {
         ALOGE("%s: Exit Read Script failed in length 0x02 ", fn);
@@ -993,8 +993,8 @@ tLSC_STATUS LSC_ReadScript(Lsc_ImageInfo_t* Os_info, uint8_t* read_buf) {
       ALOGD("%s: Length of Read Script in len_byte= 0x02 is 0x%x ", fn, wLen);
     } else if (len_byte == 0x03) {
       for (wCount = 0; (wCount < 2 && !feof(Os_info->fp)); wCount++, wIndex++) {
-        wResult =
-            FSCANF_BYTE(Os_info->fp, "%2X", (unsigned int*)&read_buf[wIndex]);
+        wResult = FSCANF_BYTE(Os_info->fp, "%2X",
+                              static_cast<uint8_t*>(&read_buf[wIndex]));
       }
       if (wResult == 0) {
         ALOGE("%s: Exit Read Script failed in length 0x03 ", fn);
@@ -1011,13 +1011,13 @@ tLSC_STATUS LSC_ReadScript(Lsc_ImageInfo_t* Os_info, uint8_t* read_buf) {
       return STATUS_FAILED;
     }
   } else {
-    len_byte = 0x01;
     wLen = read_buf[lenOff];
     ALOGE("%s: Length of Read Script in len_byte= 0x01 is 0x%x ", fn, wLen);
   }
 
   for (wCount = 0; (wCount < wLen && !feof(Os_info->fp)); wCount++, wIndex++) {
-    wResult = FSCANF_BYTE(Os_info->fp, "%2X", (unsigned int*)&read_buf[wIndex]);
+    wResult = FSCANF_BYTE(Os_info->fp, "%2X",
+                          static_cast<uint8_t*>(&read_buf[wIndex]));
   }
 
   if (wResult == 0) {
@@ -1029,7 +1029,7 @@ tLSC_STATUS LSC_ReadScript(Lsc_ImageInfo_t* Os_info, uint8_t* read_buf) {
     status = STATUS_OKAY;
   }
 
-  ALOGD("%s: exit: status=0x%x; Num of bytes read=%d and index=%d", fn, status,
+  ALOGD("%s: exit: status=0x%x; Num of bytes read=%lu and index=%d", fn, status,
         Os_info->bytes_read, wIndex);
 
   return status;
@@ -1052,7 +1052,6 @@ tLSC_STATUS LSC_SendtoEse(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
   status = STATUS_FAILED;
   phNxpLs_data cmdApdu;
   phNxpLs_data rspApdu;
-  int32_t recvBufferActualSize = 0;
   ALOGD("%s: enter", fn);
   if (pTranscv_Info->sSendData[1] == 0x70) {
     if (pTranscv_Info->sSendData[2] == 0x00) {
@@ -1073,8 +1072,9 @@ tLSC_STATUS LSC_SendtoEse(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
     phLS_memset(&cmdApdu, 0x00, sizeof(phNxpLs_data));
     phLS_memset(&rspApdu, 0x00, sizeof(phNxpLs_data));
 
-    cmdApdu.len = (int32_t)(pTranscv_Info->sSendlength);
-    cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+    cmdApdu.len = static_cast<int32_t>(pTranscv_Info->sSendlength);
+    cmdApdu.p_data =
+        static_cast<uint8_t*>(phLS_memalloc(cmdApdu.len * sizeof(uint8_t)));
     memcpy(cmdApdu.p_data, pTranscv_Info->sSendData, cmdApdu.len);
 
     transStat = LSC_Transceive(&cmdApdu, &rspApdu);
@@ -1087,7 +1087,7 @@ tLSC_STATUS LSC_SendtoEse(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
             ((rspApdu.p_data[rspApdu.len - 2] == 0x90) &&
              (rspApdu.p_data[rspApdu.len - 1] == 0x00))) {
           ALOGE("open channel success");
-          uint8_t cnt = Os_info->channel_cnt;
+          const uint8_t cnt = Os_info->channel_cnt;
           Os_info->Channel_Info[cnt].channel_id =
               rspApdu.p_data[rspApdu.len - 3];
           Os_info->Channel_Info[cnt].isOpend = true;
@@ -1129,7 +1129,8 @@ tLSC_STATUS LSC_SendtoLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
   phLS_memset(&cmdApdu, 0x00, sizeof(phNxpLs_data));
   phLS_memset(&rspApdu, 0x00, sizeof(phNxpLs_data));
   cmdApdu.len = pTranscv_Info->sSendlength;
-  cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+  cmdApdu.p_data =
+      static_cast<uint8_t*>(phLS_memalloc(cmdApdu.len * sizeof(uint8_t)));
   memcpy(cmdApdu.p_data, pTranscv_Info->sSendData, cmdApdu.len);
 
   transStat = LSC_Transceive(&cmdApdu, &rspApdu);
@@ -1139,7 +1140,8 @@ tLSC_STATUS LSC_SendtoLsc(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
   } else {
     memcpy(pTranscv_Info->sRecvData, rspApdu.p_data, rspApdu.len);
 
-    status = LSC_ProcessResp(Os_info, rspApdu.len, pTranscv_Info, tType);
+    status = LSC_ProcessResp(Os_info, static_cast<int32_t>(rspApdu.len),
+                             pTranscv_Info, tType);
   }
   phLS_free(cmdApdu.p_data);
   ALOGD("%s: exit: status=0x%x", fn, status);
@@ -1161,21 +1163,22 @@ tLSC_STATUS LSC_CloseChannel(Lsc_ImageInfo_t* Os_info, tLSC_STATUS status,
   tLSC_STATUS transStat = STATUS_FAILED;
   phNxpLs_data cmdApdu;
   phNxpLs_data rspApdu;
-  uint8_t xx = 0;
-  uint8_t cnt = 0;
   ALOGD("%s: enter", fn);
 
   if (Os_info == NULL || pTranscv_Info == NULL) {
     ALOGE("Invalid parameter");
   } else {
+    uint8_t cnt = 0;
     for (cnt = 0; (cnt < Os_info->channel_cnt); cnt++) {
       if (Os_info->Channel_Info[cnt].isOpend == false) continue;
 
       phLS_memset(&cmdApdu, 0x00, sizeof(phNxpLs_data));
       phLS_memset(&rspApdu, 0x00, sizeof(phNxpLs_data));
+      uint8_t xx = 0;
 
       cmdApdu.len = 5;
-      cmdApdu.p_data = (uint8_t*)phLS_memalloc(cmdApdu.len * sizeof(uint8_t));
+      cmdApdu.p_data =
+          static_cast<uint8_t*>(phLS_memalloc(cmdApdu.len * sizeof(uint8_t)));
       xx = 0;
       cmdApdu.p_data[xx++] = Os_info->Channel_Info[cnt].channel_id;
       cmdApdu.p_data[xx++] = 0x70;
@@ -1248,8 +1251,9 @@ tLSC_STATUS LSC_ProcessResp(Lsc_ImageInfo_t* image_info, int32_t recvlen,
 
   if ((recvlen >= 0x02) && (sw[0] == 0x6A) && (sw[1] == 0x88)) {
     // this response code is relevant for getstatus script
-    bool ret = gpLsc_Dwnld_Context->mchannel->parse_response(RecvData, recvlen);
-    if (ret) status = STATUS_OKAY;
+    if (gpLsc_Dwnld_Context->mchannel->parse_response(RecvData, recvlen)) {
+      status = STATUS_OKAY;
+    }
   } else if ((recvlen == 0x02) && (sw[0] == 0x90) && (sw[1] == 0x00)) {
     tLSC_STATUS wStatus = STATUS_FAILED;
     ALOGE("%s: Before Write Response", fn);
@@ -1277,9 +1281,6 @@ tLSC_STATUS LSC_ProcessResp(Lsc_ImageInfo_t* image_info, int32_t recvlen,
     }
     status = LSC_SendtoEse(image_info, status, trans_info);
   } else if ((recvlen > 0x02) && (sw[0] == 0x63) && (sw[1] == 0x20)) {
-    uint8_t respLen = 0;
-    int32_t wStatus = 0;
-
     AID_ARRAY[0] = recvlen + 3;
     AID_ARRAY[1] = 00;
     AID_ARRAY[2] = 0xA4;
@@ -1293,6 +1294,8 @@ tLSC_STATUS LSC_ProcessResp(Lsc_ImageInfo_t* image_info, int32_t recvlen,
     image_info->isUpdaterMode = true;
     status = STATUS_FILE_NOT_FOUND;
 #ifdef NXP_BOOTTIME_UPDATE
+    uint8_t respLen = 0;
+    int32_t wStatus = 0;
     fAID_MEM = fopen(AID_MEM_PATH[gpLsc_Dwnld_Context->
       mchannel->getInterfaceInfo()], "w");
 
@@ -1335,7 +1338,7 @@ tLSC_STATUS LSC_ProcessResp(Lsc_ImageInfo_t* image_info, int32_t recvlen,
 **
 *******************************************************************************/
 tLSC_STATUS Process_EseResponse(Lsc_TranscieveInfo_t* pTranscv_Info,
-                                int32_t recv_len, Lsc_ImageInfo_t* Os_info) {
+                                uint32_t recv_len, Lsc_ImageInfo_t* Os_info) {
   static const char fn[] = "Process_EseResponse";
   tLSC_STATUS status = STATUS_OKAY;
   uint8_t xx = 0;
@@ -1348,7 +1351,7 @@ tLSC_STATUS Process_EseResponse(Lsc_TranscieveInfo_t* pTranscv_Info,
   if (recv_len <= 0xFF) {
     pTranscv_Info->sSendData[xx++] = 0x80;
     pTranscv_Info->sSendData[xx++] = 0x00;
-    pTranscv_Info->sSendData[xx++] = (uint8_t)recv_len;
+    pTranscv_Info->sSendData[xx++] = static_cast<uint8_t>(recv_len);
     memcpy(&(pTranscv_Info->sSendData[xx]), pTranscv_Info->sRecvData, recv_len);
     pTranscv_Info->sSendlength = xx + recv_len;
     status = LSC_SendtoLsc(Os_info, status, pTranscv_Info, LS_Comm);
@@ -1391,17 +1394,19 @@ tLSC_STATUS Process_EseResponse(Lsc_TranscieveInfo_t* pTranscv_Info,
 ** Returns:         Success if ok.
 **
 *******************************************************************************/
-tLSC_STATUS Process_SelectRsp(uint8_t* Recv_data, int32_t Recv_len) {
+tLSC_STATUS Process_SelectRsp(uint8_t* Recv_data, uint32_t Recv_len) {
   (void)Recv_len;
   static const char fn[] = "Process_SelectRsp";
   tLSC_STATUS status = STATUS_FAILED;
-  int i = 0, len = 0;
+  int i = 0;
   ALOGE("%s: enter", fn);
 
   if (Recv_data[i] == TAG_SELECT_ID) {
     ALOGD("TAG: TAG_SELECT_ID");
+    int len = 0;
     i = i + 1;
     len = Recv_data[i];
+    ALOGD("TAG_SELECT_ID len = %d", len);
     i = i + 1;
     if (Recv_data[i] == TAG_LSC_ID) {
       ALOGD("TAG: TAG_LSC_ID");
@@ -1434,7 +1439,7 @@ tLSC_STATUS Process_SelectRsp(uint8_t* Recv_data, int32_t Recv_len) {
             i = i + tag42Len + 1;
             ALOGD("tag42Arr %s", ARR_AS_STRING(tag42Arr).c_str());
             if (Recv_data[i] == TAG_LSRE_SIGNID) {
-              uint8_t tag45Len = Recv_data[i + 1];
+              const uint8_t tag45Len = Recv_data[i + 1];
               memcpy(tag45Arr, &Recv_data[i + 1], tag45Len + 1);
               status = STATUS_OKAY;
             } else {
@@ -1502,8 +1507,6 @@ uint8_t Numof_lengthbytes(uint8_t* read_buf, int32_t* pLen) {
    * */
   switch (len_byte) {
     case 0:
-      wLen = read_buf[0];
-      break;
     case 1:
       /*1st byte is the length*/
       wLen = read_buf[0];
@@ -1545,20 +1548,17 @@ uint8_t Numof_lengthbytes(uint8_t* read_buf, int32_t* pLen) {
 tLSC_STATUS Write_Response_To_OutFile(Lsc_ImageInfo_t* image_info,
                                       uint8_t* RecvData, int32_t recvlen,
                                       Ls_TagType tType) {
-  int32_t respLen = 0;
   tLSC_STATUS wStatus = STATUS_FAILED;
   wStatus = STATUS_OKAY;
   static const char fn[] = "Write_Response_to_OutFile";
-  int32_t status = 0;
   uint8_t tagBuffer[12] = {0x61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   int32_t tag44Len = 0;
-  int32_t tag61Len = 0;
+  int32_t tag61Len;
   uint8_t tag43Len = 1;
   uint8_t tag43off = 0;
   uint8_t tag44off = 0;
   uint8_t ucTag44[3] = {0x00, 0x00, 0x00};
   uint8_t tagLen = 0;
-  uint8_t tempLen = 0;
   /*If the Response out file is NULL or Other than LS commands*/
   if ((image_info->bytes_wrote == 0x55) || (tType == LS_Default)) {
 #ifdef NXP_BOOTTIME_UPDATE
@@ -1646,13 +1646,14 @@ tLSC_STATUS Write_Response_To_OutFile(Lsc_ImageInfo_t* image_info,
   } else {
     /*Do nothing*/
   }
-  uint8_t* buffer_to_print = new uint8_t[tagLen + recvlen];
-  memcpy(&buffer_to_print[0], &tagBuffer[0], tagLen);
-  memcpy(&buffer_to_print[tagLen], &RecvData[0], recvlen);
-  std::vector<uint8_t> sems_response(buffer_to_print,
-                                     buffer_to_print + (tagLen + recvlen));
+  std::vector<uint8_t> sems_response;
+  sems_response.reserve(tagLen + recvlen);
+  sems_response.insert(sems_response.end(), tagBuffer, tagBuffer + tagLen);
+  sems_response.insert(sems_response.end(), RecvData, RecvData + recvlen);
   ALOGD("response: %s", toString(sems_response).c_str());
 #ifdef NXP_BOOTTIME_UPDATE
+  int32_t status;
+  uint8_t tempLen = 0;
   while (tempLen < tagLen) {
     status = fprintf(image_info->fResp, "%02X", tagBuffer[tempLen++]);
     if (status != 2) {
@@ -1661,6 +1662,7 @@ tLSC_STATUS Write_Response_To_OutFile(Lsc_ImageInfo_t* image_info,
       break;
     }
   }
+  int32_t respLen = 0;
   /*Updating the response data into out script*/
   while (respLen < recvlen) {
     status = fprintf(image_info->fResp, "%02X", RecvData[respLen++]);
@@ -1693,11 +1695,11 @@ tLSC_STATUS Write_Response_To_OutFile(Lsc_ImageInfo_t* image_info,
 *******************************************************************************/
 tLSC_STATUS Check_Certificate_Tag(uint8_t* read_buf, uint16_t* offset1) {
   tLSC_STATUS status = STATUS_FAILED;
-  uint16_t len_byte = 0;
   int32_t wLen /*, recvBufferActualSize=0*/;
   uint16_t offset = *offset1;
 
   if (((read_buf[offset] << 8 | read_buf[offset + 1]) == TAG_CERTIFICATE)) {
+    uint16_t len_byte = 0;
     ALOGD("TAGID: TAG_CERTIFICATE");
     offset = offset + 2;
     len_byte = Numof_lengthbytes(&read_buf[offset], &wLen);
@@ -1725,7 +1727,7 @@ tLSC_STATUS Check_SerialNo_Tag(uint8_t* read_buf, uint16_t* offset1) {
 
   if (read_buf[offset] == TAG_SERIAL_NO) {
     ALOGD("TAGID: TAG_SERIAL_NO");
-    uint8_t serNoLen = read_buf[offset + 1];
+    const uint8_t serNoLen = read_buf[offset + 1];
     offset = offset + serNoLen + 2;
     *offset1 = offset;
     ALOGD("%s: TAG_LSROOT_ENTITY is %x", fn, read_buf[offset]);
@@ -1749,7 +1751,7 @@ tLSC_STATUS Check_LSRootID_Tag(uint8_t* read_buf, uint16_t* offset1) {
   if (read_buf[offset] == TAG_LSRE_ID) {
     ALOGD("TAGID: TAG_LSROOT_ENTITY");
     if (tag42Arr[0] == read_buf[offset + 1]) {
-      uint8_t tag42Len = read_buf[offset + 1];
+      const uint8_t tag42Len = read_buf[offset + 1];
       offset = offset + 2;
       if(!memcmp(&read_buf[offset], &tag42Arr[1], tag42Arr[0])) {
         ALOGD("LSC_Check_KeyIdentifier : TAG 42 verified,"
@@ -1810,11 +1812,11 @@ tLSC_STATUS Check_Date_Tag(uint8_t* read_buf, uint16_t* offset1) {
   uint16_t offset = *offset1;
 
   if ((read_buf[offset] << 8 | read_buf[offset + 1]) == TAG_EFF_DATE) {
-    uint8_t effDateLen = read_buf[offset + 2];
+    const uint8_t effDateLen = read_buf[offset + 2];
     offset = offset + 3 + effDateLen;
     ALOGD("TAGID: TAG_EFF_DATE");
     if ((read_buf[offset] << 8 | read_buf[offset + 1]) == TAG_EXP_DATE) {
-      uint8_t effExpLen = read_buf[offset + 2];
+      const uint8_t effExpLen = read_buf[offset + 2];
       offset = offset + 3 + effExpLen;
       ALOGD("TAGID: TAG_EXP_DATE");
       status = STATUS_OKAY;
@@ -1822,7 +1824,7 @@ tLSC_STATUS Check_Date_Tag(uint8_t* read_buf, uint16_t* offset1) {
       status = STATUS_OKAY;
     }
   } else if ((read_buf[offset] << 8 | read_buf[offset + 1]) == TAG_EXP_DATE) {
-    uint8_t effExpLen = read_buf[offset + 2];
+    const uint8_t effExpLen = read_buf[offset + 2];
     offset = offset + 3 + effExpLen;
     ALOGD("TAGID: TAG_EXP_DATE");
     status = STATUS_OKAY;
@@ -1882,7 +1884,7 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
   uint16_t offset = *offset1;
   int32_t wCertfLen = (read_buf[2] << 8 | read_buf[3]);
   static const char fn[] = "Certificate_Verification";
-  uint8_t tag_len_byte = Numof_lengthbytes(&read_buf[2], &wCertfLen);
+  const uint8_t tag_len_byte = Numof_lengthbytes(&read_buf[2], &wCertfLen);
 
   pTranscv_Info->sSendData[0] = 0x80;
   pTranscv_Info->sSendData[1] = 0xA0;
@@ -1890,7 +1892,6 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
   pTranscv_Info->sSendData[3] = 0x00;
   /*If the certificate is less than 255 bytes*/
   if (wCertfLen <= 251) {
-    uint8_t u7f49Len = 0;
     ALOGD("Certificate is greater than 255");
     offset = offset + *tag45Len;
     ALOGD("%s: Before TAG_CCM_PERMISSION = %x", fn, read_buf[offset]);
@@ -1902,19 +1903,19 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
       offset = offset + tag53Len + len_byte;
       ALOGD("%s: Verified TAG TAG_CCM_PERMISSION = 0x53", fn);
       if (read_buf[offset] == 0x73) {
-        uint16_t tag73Len = read_buf[offset + 1];
+        const uint16_t tag73Len = read_buf[offset + 1];
         ALOGD("TAG73 with len %u ignored", tag73Len);
         offset = offset + tag73Len + 2;
       }
-      if ((uint16_t)(read_buf[offset] << 8 | read_buf[offset + 1]) ==
+      if (static_cast<uint16_t>(read_buf[offset] << 8 | read_buf[offset + 1]) ==
           TAG_SIG_RNS_COMP) {
-        u7f49Len = read_buf[offset + 2];
+        const uint8_t u7f49Len = read_buf[offset + 2];
         offset = offset + 3 + u7f49Len;
         if (u7f49Len != 64) {
           return STATUS_FAILED;
         }
-        if ((uint16_t)(read_buf[offset] << 8 | read_buf[offset + 1]) ==
-            0x7f49) {
+        if (static_cast<uint16_t>(read_buf[offset] << 8 |
+                                  read_buf[offset + 1]) == 0x7f49) {
           if (read_buf[offset + 3] != 0x86 || (read_buf[offset + 4] != 65)) {
             return STATUS_FAILED;
           }
@@ -1943,9 +1944,6 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
   }
   /*If the certificate is more than 255 bytes*/
   else {
-    uint8_t tag7f49Off = 0;
-    uint8_t u7f49Len = 0;
-    uint8_t tag5f37Len = 0;
     ALOGD("Certificate is greater than 255");
     offset = offset + *tag45Len;
     ALOGD("%s: Before TAG_CCM_PERMISSION = %x", fn, read_buf[offset]);
@@ -1957,20 +1955,21 @@ tLSC_STATUS Certificate_Verification(Lsc_ImageInfo_t* Os_info,
       offset = offset + tag53Len + len_byte;
       ALOGD("%s: Verified TAG TAG_CCM_PERMISSION = 0x53", fn);
       if (read_buf[offset] == 0x73) {
-        uint16_t tag73Len = read_buf[offset + 1];
+        const uint16_t tag73Len = read_buf[offset + 1];
         ALOGD("TAG73 with len %u ignored", tag73Len);
         offset = offset + tag73Len + 2;
       }
-      if ((uint16_t)(read_buf[offset] << 8 | read_buf[offset + 1]) ==
+      if (static_cast<uint16_t>(read_buf[offset] << 8 | read_buf[offset + 1]) ==
           TAG_SIG_RNS_COMP) {
-        tag7f49Off = offset;
-        u7f49Len = read_buf[offset + 2];
+        const uint8_t tag7f49Off = offset;
+        const uint8_t u7f49Len = read_buf[offset + 2];
+        uint8_t tag5f37Len = 0;
         offset = offset + 3 + u7f49Len;
         if (u7f49Len != 64) {
           return STATUS_FAILED;
         }
-        if ((uint16_t)(read_buf[offset] << 8 | read_buf[offset + 1]) ==
-            0x7f49) {
+        if (static_cast<uint16_t>(read_buf[offset] << 8 |
+                                  read_buf[offset + 1]) == 0x7f49) {
           tag5f37Len = read_buf[offset + 2];
           if (read_buf[offset + 3] != 0x86 || (read_buf[offset + 4] != 65)) {
             return STATUS_FAILED;
@@ -2089,6 +2088,7 @@ bool LSC_UpdateExeStatus(uint16_t status) {
   ALOGD("exit: LSC_UpdateExeStatus");
   fclose(fLS_STATUS);
 #else
+  (void)status;
   ALOGD("LSC_UpdateExeStatus is not implemented");
 #endif
   return true;
@@ -2137,16 +2137,15 @@ static tLSC_STATUS LSC_Transceive(phNxpLs_data* pCmd, phNxpLs_data* pRsp)
   Lsc_TranscieveInfo_t* pTranscv_Info = &gpLsc_Dwnld_Context->Transcv_Info;
 
   pTranscv_Info->timeout = gTransceiveTimeout;
-  pTranscv_Info->sSendlength = pCmd->len;
+  pTranscv_Info->sSendlength = static_cast<int32_t>(pCmd->len);
   pTranscv_Info->sRecvlength = 1024;//(int32_t)sizeof(int32_t);
 
   memcpy(pTranscv_Info->sSendData, pCmd->p_data, pTranscv_Info->sSendlength);
-  stat = mchannel->transceive (pTranscv_Info->sSendData,
-          pTranscv_Info->sSendlength,
-          pTranscv_Info->sRecvData,
-          pTranscv_Info->sRecvlength,
-          recvBufferActualSize,
-          pTranscv_Info->timeout);
+  stat =
+      mchannel->transceive(pTranscv_Info->sSendData,
+                           static_cast<int32_t>(pTranscv_Info->sSendlength),
+                           pTranscv_Info->sRecvData, pTranscv_Info->sRecvlength,
+                           recvBufferActualSize, pTranscv_Info->timeout);
   if(stat == true)
   {
     pRsp->len = recvBufferActualSize;

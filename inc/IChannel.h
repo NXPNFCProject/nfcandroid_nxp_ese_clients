@@ -20,12 +20,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "data_types.h"
-typedef enum InterfaceInfo {
+typedef enum InterfaceInfo : uint8_t {
   INTF_NFC = 0,
   INTF_SE = 1,
 } IntfInfo;
 
-typedef enum SemsUpdaterKind {
+typedef enum SemsUpdaterKind : uint8_t {
   SEMS_MAIN = 0,
   SEMS_UPDATER = 1,
 } SemsUpdaterKind;

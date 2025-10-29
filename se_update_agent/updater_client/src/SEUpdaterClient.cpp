@@ -41,12 +41,12 @@ constexpr char kEseLoadPendingProp[] = "vendor.se_update_agent.load_pending";
 constexpr char kEseLoadRetryCountProp[] =
     "persist.vendor.se_update_agent.load_retry_cnt";
 
-void CheckAndApplyUpdate(const std::string& script_dir_path);
+static void CheckAndApplyUpdate(const std::string& script_dir_path);
 static SESTATUS ApplyUpdate(ExecutionState exe_state);
 static SESTATUS ExecuteSemsScript(const char* script_path,
                                   std::streampos start_offset,
                                   ExecutionState exec_state);
-void seteSEClientState(uint8_t state);
+static void seteSEClientState(uint8_t state);
 static SESTATUS GetInterruptedScriptPath(std::string& interrupted_script_path,
                                          std::streampos& start_offset,
                                          ExecutionState exe_state);
@@ -55,19 +55,20 @@ void* eSEClientUpdate_ThreadHandler(void* data);
 void* eSEUpdate_SE_SeqHandler(void* data);
 void eSEClientUpdate_Thread(const char* path);
 #endif  // NXP_BOOTTIME_UPDATE
-SESTATUS ESE_ChannelInit(IChannel* ch);
-uint8_t performLSUpdate(const char* path, std::streampos start_offset);
-SESTATUS eSEUpdate_SeqHandler(const char* path, std::streampos start_offset);
+static SESTATUS ESE_ChannelInit(IChannel* ch);
+static uint8_t performLSUpdate(const char* path, std::streampos start_offset);
+static SESTATUS eSEUpdate_SeqHandler(const char* path,
+                                     std::streampos start_offset);
 static std::streampos getStartoffset(
     const struct LoadUpdateScriptMetaInfo& script);
 
 static TransportType current_transport = TransportType::HAL_TO_OMAPI;
-IChannel_t Ch;
-ese_update_state_t ese_update = ESE_UPDATE_COMPLETED;
+static IChannel_t Ch;
+static ese_update_state_t ese_update = ESE_UPDATE_COMPLETED;
 
-void SE_Reset() { /* phNxpEse_coldReset(); */ }
+static void SE_Reset() { /* phNxpEse_coldReset(); */ }
 
-int16_t SE_Open() {
+static int16_t SE_Open() {
   // connect to eSEHAL or OMAPI based on transport type
   ALOGD("SE_Open: initiliaze connection to eSEHAL");
   SEConnection::getInstance(current_transport);
@@ -90,9 +91,10 @@ SESTATUS InitializeConnection() {
   return SESTATUS_FAILED;
 }
 
-bool SE_Transmit(uint8_t* xmitBuffer, int32_t xmitBufferSize,
-                 uint8_t* recvBuffer, int32_t recvBufferMaxSize,
-                 int32_t& recvBufferActualSize, int32_t timeoutMillisec) {
+static bool SE_Transmit(uint8_t* xmitBuffer, int32_t xmitBufferSize,
+                        uint8_t* recvBuffer, int32_t /*recvBufferMaxSize*/,
+                        int32_t& recvBufferActualSize,
+                        int32_t /*timeoutMillisec*/) {
   bool result = false;
 
   std::vector<uint8_t> cmd_vec(xmitBuffer, xmitBuffer + xmitBufferSize);
@@ -101,22 +103,22 @@ bool SE_Transmit(uint8_t* xmitBuffer, int32_t xmitBufferSize,
 
   if (cmd_vec.size() >= 3 && cmd_vec[0] == 0x00 && cmd_vec[1] == 0xA4 &&
       cmd_vec[2] == 0x04) {
-    std::vector<uint8_t> aid(xmitBuffer + 5, xmitBuffer + xmitBufferSize);
+    const std::vector<uint8_t> aid(xmitBuffer + 5, xmitBuffer + xmitBufferSize);
     ALOGD("OpenChannel for AID: %s", toString(aid).c_str());
     std::vector<uint8_t> select_resp = {};
     int8_t channel_num = -1;
-    SEConnection::getInstance().transport_->openChannel(aid, channel_num,
-                                                        select_resp);
+    SEConnection::getInstance().getTransport()->openChannel(aid, channel_num,
+                                                            select_resp);
     if (channel_num != -1) {
       recvBuffer[0] = channel_num;
       memcpy(&recvBuffer[1], &select_resp[0], select_resp.size());
-      recvBufferActualSize = select_resp.size() + 1;
+      recvBufferActualSize = static_cast<int32_t>(select_resp.size() + 1);
       ALOGD("Select AID Response: %s", toString(select_resp).c_str());
       ALOGD("Channel number for select AID: %d", static_cast<int>(channel_num));
       result = true;
     } else {
       memcpy(&recvBuffer[0], &select_resp[0], select_resp.size());
-      recvBufferActualSize = select_resp.size();
+      recvBufferActualSize = static_cast<int32_t>(select_resp.size());
       ALOGD("openLogicalChannel Failed");
     }
   } else if (cmd_vec.size() >= 5 && cmd_vec[1] == 0x70 && cmd_vec[2] == 0x80 &&
@@ -124,7 +126,7 @@ bool SE_Transmit(uint8_t* xmitBuffer, int32_t xmitBufferSize,
     ALOGD("Close channel with channelId: %d",
           static_cast<uint32_t>(cmd_vec[0] & 0xFF));
     auto status =
-        SEConnection::getInstance().transport_->closeChannel(cmd_vec[0]);
+        SEConnection::getInstance().getTransport()->closeChannel(cmd_vec[0]);
     recvBufferActualSize = 2;
     if (!status) {
       recvBuffer[0] = 0x64;
@@ -139,10 +141,10 @@ bool SE_Transmit(uint8_t* xmitBuffer, int32_t xmitBufferSize,
   } else {
     std::vector<uint8_t> resp_vec;
     auto status =
-        SEConnection::getInstance().transport_->sendData(cmd_vec, resp_vec);
+        SEConnection::getInstance().getTransport()->sendData(cmd_vec, resp_vec);
     if (status) {
       memcpy(&recvBuffer[0], &resp_vec[0], resp_vec.size());
-      recvBufferActualSize = resp_vec.size();
+      recvBufferActualSize = static_cast<int32_t>(resp_vec.size());
       ALOGD("resp_vec is %s", toString(resp_vec).c_str());
       result = true;
     } else {
@@ -150,20 +152,20 @@ bool SE_Transmit(uint8_t* xmitBuffer, int32_t xmitBufferSize,
     }
   }
   ALOGD("%s: recBufferActualsize = 0x%x ", __FUNCTION__, recvBufferActualSize);
-  return true;
+  return result;
 }
 
-void SE_JcopDownLoadReset() { /*phNxpEse_resetJcopUpdate();*/ }
+static void SE_JcopDownLoadReset() { /*phNxpEse_resetJcopUpdate();*/ }
 
-bool SE_Close(int16_t mHandle) {
+static bool SE_Close(int16_t mHandle) {
   // TODO : correct usage of this method
-  if (mHandle != 0)
+  if (mHandle != 0) {
     return true;
-  else
-    return false;
+  }
+  return false;
 }
 
-bool SE_parse_response(uint8_t* recvBuffer, int32_t recvBuffersize) {
+static bool SE_parse_response(uint8_t* recvBuffer, int32_t recvBuffersize) {
   return ParseResponse(recvBuffer, recvBuffersize);
 }
 #ifdef NXP_BOOTTIME_UPDATE
@@ -210,7 +212,7 @@ static SESTATUS ExecuteSemsScript(const char* script_path,
     seteSEClientState(ESE_LS_UPDATE_REQUIRED);
     SetScriptExecutionState(exec_state);
     std::string interrupted_script_path;
-    std::streampos start_offset = 0;  // default start from beginning
+    start_offset = 0;  // default start from beginning
     // find the start_offset
     GetInterruptedScriptPath(interrupted_script_path, start_offset, exec_state);
     status = eSEUpdate_SeqHandler(script_path, start_offset);
@@ -242,7 +244,7 @@ static SESTATUS getLastScriptExecutionState(
 
   status = LsClient_SemsSendGetDataCmd(INS_GET_DATA, P2_EXE_STATUS, resp_vec);
   if (status == SESTATUS_OK) {
-    uint32_t resp_size = resp_vec.size();
+    const uint32_t resp_size = resp_vec.size();
     if (resp_size >= 3 && resp_vec[resp_size - 2] == 0x90 &&
         resp_vec[resp_size - 1] == 0x00) {
       // third byte from starting is the response code
@@ -252,8 +254,9 @@ static SESTATUS getLastScriptExecutionState(
       resp_vec.resize(0);
       status = LsClient_SemsSendGetDataCmd(INS_GET_DATA, P2_GET_AUTH_FRAME_SIGN,
                                            resp_vec);
-      if (status == SESTATUS_OK)
+      if (status == SESTATUS_OK) {
         auth_frame_signature.assign(&resp_vec[4], &resp_vec[4] + resp_vec[3]);
+      }
     }
   } else {
     ALOGE("%s : GETDATA CMD Failed", __FUNCTION__);
@@ -268,15 +271,17 @@ static bool HasMatchingSignature(
     const std::vector<std::pair<std::vector<uint8_t>, std::streampos>>&
         auth_frames_in_script,
     std::streampos* script_start_offset) {
-  for (const auto& auth_frame : auth_frames_in_script) {
-    if (interrupted_auth_frame == auth_frame.first) {
-      *script_start_offset = auth_frame.second;
-      ALOGD("Interrupted Script auth frame found at offset %lld",
-            static_cast<long long>(*script_start_offset));
-      return true;
-    }
+  auto iter = std::find_if(
+      auth_frames_in_script.begin(), auth_frames_in_script.end(),
+      [&](const std::pair<std::vector<uint8_t>, std::streampos>& auth_frame) {
+        return interrupted_auth_frame == auth_frame.first;
+      });
+  if (iter != auth_frames_in_script.end()) {
+    *script_start_offset = iter->second;
+    ALOGD("Interrupted Script auth frame found at offset %lld",
+          static_cast<long long>(*script_start_offset));
+    return true;
   }
-
   return false;
 }
 
@@ -361,7 +366,6 @@ static SESTATUS ResumeInterruptedScript(const std::string& script_dir_path,
   if (status != SESTATUS_OK) {
     return status;
   }
-  auto getstatus_script_metadata = GetStatusScriptData();
   std::string interrupted_script_path;
   std::streampos start_offset = 0;  // default start from beginning
   GetInterruptedScriptPath(interrupted_script_path, start_offset, exe_state);
@@ -379,7 +383,7 @@ static SESTATUS ResumeInterruptedScript(const std::string& script_dir_path,
 }
 
 // wrapper function to know if applet load/update is required
-SESTATUS CheckAppletUpdateRequired(bool* load_req, bool* update_req) {
+static SESTATUS CheckAppletUpdateRequired(bool* load_req, bool* update_req) {
   // compare currently installed versions with versions from SEMS scripts
   auto getstatus_script_metadata = GetStatusScriptData();
   auto status = ExecuteSemsScript(getstatus_script_metadata.script_path.c_str(),
@@ -444,7 +448,7 @@ SESTATUS PrepareUpdate(const std::string& script_dir_path, bool retry_load) {
 
 void PerformUpdate(const std::string& script_dir_path) {
   // check and resume if SEMS Self update was teared
-  std::string sems_self_update_dir_path =
+  const std::string sems_self_update_dir_path =
       script_dir_path + "/" + SEMS_SELF_UPDATE_DIR_NAME;
 
   current_transport = TransportType::HAL_TO_HAL;
@@ -487,7 +491,7 @@ void CheckAndApplyUpdate(const std::string& script_dir_path) {
 }
 
 void RetryPrepareUpdate(const std::string& script_dir_path) {
-  std::string prop_value =
+  const std::string prop_value =
       android::base::GetProperty(kEseLoadPendingProp, /* default */ "0");
   if (prop_value.compare("1") == 0) {
     ALOGI("ELF load is pending");
@@ -519,7 +523,6 @@ SESTATUS ApplyUpdate(ExecutionState exe_state) {
   ALOGD("Display all scripts info after check update_required");
   DisplayAllScriptsInfo();
 
-  std::string current_script_path;
   bool preload_pending = false;
   ALOGI("exe_state is %d", exe_state);
   for (const auto& current_script : all_scripts_info) {
@@ -621,7 +624,6 @@ void eSEClientUpdate_Thread(const char* script_path) {
 *******************************************************************************/
 void* eSEClientUpdate_ThreadHandler(void* data) {
   (void)data;
-  int cnt = 0;
   const char* script_path = (char*)data;
   ALOGD("%s Enter\n", __func__);
   seteSEClientState(ESE_LS_UPDATE_REQUIRED);
@@ -657,7 +659,7 @@ uint8_t performLSUpdate(const char* path, std::streampos start_offset) {
 *******************************************************************************/
 void seteSEClientState(uint8_t state) {
   ALOGE("%s: State = %d", __FUNCTION__, state);
-  ese_update = (ese_update_state_t)state;
+  ese_update = static_cast<ese_update_state_t>(state);
 }
 /*******************************************************************************
 **
@@ -674,7 +676,7 @@ SESTATUS eSEUpdate_SeqHandler(const char* path, std::streampos start_offset) {
     case ESE_UPDATE_STARTED:
       [[fallthrough]];
     case ESE_LS_UPDATE_REQUIRED:
-      status = (SESTATUS)performLSUpdate(path, start_offset);
+      status = static_cast<SESTATUS>(performLSUpdate(path, start_offset));
       if (status != SESTATUS_OK) {
         ALOGE("%s: LS_UPDATE_FAILED", __FUNCTION__);
       }
@@ -702,8 +704,8 @@ SESTATUS eSEUpdate_SeqHandler(const char* path, std::streampos start_offset) {
 void LogVersionInfo(const std::string& script_dir_path) {
   std::string sems_self_update_dir_path =
       script_dir_path + "/" + SEMS_SELF_UPDATE_DIR_NAME;
-  std::vector<std::string> update_pkg_path = {std::move(sems_self_update_dir_path),
-                                              script_dir_path};
+  const std::vector<std::string> update_pkg_path = {
+      std::move(sems_self_update_dir_path), script_dir_path};
 
   current_transport = TransportType::HAL_TO_OMAPI;
 

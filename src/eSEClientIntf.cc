@@ -32,7 +32,7 @@
 #define TERMINAL_LEN  5
 bool nfc_debug_enabled;
 void* performJCOS_Download_thread(void* data);
-IChannel_t Ch;
+static IChannel_t Ch;
 static const char *path[3] = {"/vendor/etc/JcopOs_Update1.apdu",
                              "/vendor/etc/JcopOs_Update2.apdu",
                              "/vendor/etc/JcopOs_Update3.apdu"};
@@ -46,7 +46,7 @@ static const char *lsUpdateBackupPath =
 static const char *isFirstTimeLsUpdate[2] =
 {"/data/vendor/nfc/LS_Status.txt",
  "/data/vendor/secure_element/LS_Status.txt"};
-se_extns_entry seExtn;
+static se_extns_entry seExtn;
 
 static bool scriptUpdateRequired(ESE_CLIENT_INTF intf);
 static bool jcopOsUpdateRequired(ESE_CLIENT_INTF intf);
@@ -61,8 +61,7 @@ static bool jcopOsUpdateRequired(ESE_CLIENT_INTF intf);
 ** Returns:         SUCCESS of ok
 **
 *******************************************************************************/
-uint8_t checkeSEClientRequired(ESE_CLIENT_INTF intf ) {
-  uint8_t status = SESTATUS_FAILED;
+uint8_t checkeSEClientRequired(ESE_CLIENT_INTF intf) {
   unsigned long int num;
   bool isApduPresent = true;
   bool isSystemImgUpdated = false;
@@ -72,20 +71,16 @@ uint8_t checkeSEClientRequired(ESE_CLIENT_INTF intf ) {
 
   LOG(ERROR) <<"Check_HalStart_Entry: enter:  ";
   /*Check APDU files are present*/
-  for (int num = 0; num < 2; num++)
-  {
-    if (stat(uai_path[num], &st))
-    {
+  for (int index = 0; index < 2; index++) {
+    if (stat(uai_path[index], &st)) {
       isApduPresent = false;
     }
   }
   /*If UAI specific files are present*/
   if(isApduPresent == true)
   {
-    for (int num = 0; num < 1; num++)
-    {
-      if (stat(path[num], &st))
-      {
+    for (int index = 0; index < 1; index++) {
+      if (stat(path[index], &st)) {
         isApduPresent = false;
       }
     }
@@ -138,7 +133,7 @@ uint8_t checkeSEClientRequired(ESE_CLIENT_INTF intf ) {
     LOG(ERROR) <<" LS update not required  ";
     seExtn.isLSUpdateRequired = false;
   }
-  return status;
+  return SESTATUS_SUCCESS;
 }
 
 /*******************************************************************************
@@ -153,7 +148,7 @@ uint8_t checkeSEClientRequired(ESE_CLIENT_INTF intf ) {
 bool scriptUpdateRequired(ESE_CLIENT_INTF intf)
 {
   bool mScriptUpdateRequired = false;
-  uint32_t status[2] = {SEMS_STATUS_FAILED_SW1, SEMS_STATUS_FAILED_SW2};
+  uint8_t status[2] = {SEMS_STATUS_FAILED_SW1, SEMS_STATUS_FAILED_SW2};
   FILE* fLS_STATUS = fopen(isFirstTimeLsUpdate[intf-1], "r");
 
   if (fLS_STATUS == NULL) {
@@ -161,10 +156,19 @@ bool scriptUpdateRequired(ESE_CLIENT_INTF intf)
     mScriptUpdateRequired = true;
   }
   else {
-    if ((fscanf(fLS_STATUS, "%2x %2x", &status[0], &status[1])) == 0) {
-      LOG(ERROR) <<"Error reading status file:";
-      status[0] = SEMS_STATUS_FAILED_SW1;
-      status[1] = SEMS_STATUS_FAILED_SW2;
+    char buf[10];
+    if (fgets(buf, sizeof(buf), fLS_STATUS)) {
+      char *endptr1, *endptr2;
+      const uint64_t val1 = strtoul(buf, &endptr1, 16);
+      const uint64_t val2 = strtoul(endptr1, &endptr2, 16);
+      if (*endptr1 != '\0' || *endptr2 != '\0') {
+        LOG(ERROR) << "Error reading status file:";
+        status[0] = SEMS_STATUS_FAILED_SW1;
+        status[1] = SEMS_STATUS_FAILED_SW2;
+      } else {
+        status[0] = static_cast<uint8_t>(val1);
+        status[1] = static_cast<uint8_t>(val2);
+      }
     }
     if(status[0] == SEMS_STATUS_SUCCESS_SW1 &&
                   status[1] == SEMS_STATUS_SUCCESS_SW2) {
@@ -199,20 +203,26 @@ bool jcopOsUpdateRequired(ESE_CLIENT_INTF intf)
     isUpdateRequired = true;
   }
   else {
-    if (fscanf(fp, "%u", &status) == 0) {
-      LOG(ERROR) <<"jcop status read fail";
-      isUpdateRequired = true;
+    char buf[32];
+    if (fgets(buf, sizeof(buf), fp)) {
+      char* endptr;
+      const unsigned long temp = strtoul(buf, &endptr, 10);
+      if (endptr == buf || *endptr != '\n') {
+        LOG(ERROR) << "Failed to convert to decimal number";
+      } else {
+        status = static_cast<uint32_t>(temp);
+      }
+    } else {
+      LOG(ERROR) << "jcopOsUpdateRequired : Failed to read from file. errno: "
+                 << errno;
     }
-    else {
-      LOG(ERROR) << "JcopOsState: "<< status;
-      if (status == JCOP_UPDATE_3STEP_DONE) {
-        isUpdateRequired = false;
-        LOG(ERROR) <<"jcopOsUpdateRequired : Jcop update completed";
-      }
-      else {
-        LOG(ERROR) << "jcopOsUpdateRequired : Jcop update required";
-        isUpdateRequired = true;
-      }
+    LOG(DEBUG) << "JcopOsState: " << status;
+    if (status == JCOP_UPDATE_3STEP_DONE) {
+      isUpdateRequired = false;
+      LOG(ERROR) << "jcopOsUpdateRequired : Jcop update completed";
+    } else {
+      LOG(ERROR) << "jcopOsUpdateRequired : Jcop update required";
+      isUpdateRequired = true;
     }
     fclose(fp);
   }

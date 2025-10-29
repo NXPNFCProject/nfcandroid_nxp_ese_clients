@@ -39,21 +39,21 @@ typedef struct Lsc_TranscieveInfo {
   int32_t timeout;
   uint8_t sRecvData[1024];
   uint8_t sSendData[1024];
-  int32_t sSendlength;
+  uint32_t sSendlength;
   int sRecvlength;
   uint8_t sTemp_recvbuf[1024];
 } Lsc_TranscieveInfo_t;
 
 typedef struct Lsc_ImageInfo {
   FILE* fp;
-  int fls_size;
+  int64_t fls_size;
   char fls_path[384];
-  int bytes_read;
+  uint64_t bytes_read;
   FILE* fResp;
   int fls_RespSize;
   char fls_RespPath[384];
-  int bytes_wrote;
-  long long fls_start_offset;
+  uint64_t bytes_wrote;
+  int64_t fls_start_offset;
   Lsc_ChannelInfo_t Channel_Info[10];
   uint8_t channel_cnt;
   bool isUpdaterMode;
@@ -220,7 +220,7 @@ void finalize();
 *******************************************************************************/
 tLSC_STATUS Perform_LSC(const char* path, const char* dest,
                         std::streampos start_offset, const uint8_t* pdata,
-                        uint16_t len, uint8_t* respSW);
+                        uint16_t len);
 
 /*******************************************************************************
 **
@@ -515,7 +515,7 @@ tLSC_STATUS LSC_ReadScript(Lsc_ImageInfo_t* Os_info, uint8_t* read_buf);
 **
 *******************************************************************************/
 tLSC_STATUS Process_EseResponse(Lsc_TranscieveInfo_t* pTranscv_Info,
-                                int32_t recv_len, Lsc_ImageInfo_t* Os_info);
+                                uint32_t recv_len, Lsc_ImageInfo_t* Os_info);
 
 /*******************************************************************************
 **
@@ -527,7 +527,7 @@ tLSC_STATUS Process_EseResponse(Lsc_TranscieveInfo_t* pTranscv_Info,
 ** Returns:         Success if ok.
 **
 *******************************************************************************/
-tLSC_STATUS Process_SelectRsp(uint8_t* Recv_data, int32_t Recv_len);
+tLSC_STATUS Process_SelectRsp(uint8_t* Recv_data, uint32_t Recv_len);
 
 /*******************************************************************************
 **
@@ -587,15 +587,15 @@ inline int FSCANF_BYTE(FILE* stream, const char* format, void* pVal) {
 
   if ((NULL != stream) && (NULL != format) && (NULL != pVal)) {
     unsigned int dwVal;
-    unsigned char* pTmp = (unsigned char*)pVal;
+    unsigned char* pTmp = static_cast<unsigned char*>(pVal);
     Result = fscanf(stream, format, &dwVal);
 
-    (*pTmp) = (unsigned char)(dwVal & 0x000000FF);
+    (*pTmp) = static_cast<unsigned char>(dwVal & 0x000000FF);
   }
   return Result;
 }
 std::string toString(const std::vector<uint8_t>& vec);
 #define ARR_AS_STRING(x) \
-  toString(std::vector<uint8_t>(x, x + sizeof(x) / sizeof(x[0])))
+  toString(std::vector<uint8_t>((x), (x) + (sizeof(x) / sizeof((x)[0]))))
 
 #endif /*LSC_H*/

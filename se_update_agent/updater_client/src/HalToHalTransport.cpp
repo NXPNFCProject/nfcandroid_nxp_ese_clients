@@ -50,7 +50,6 @@
 using aidl::android::hardware::secure_element::BnSecureElementCallback;
 using aidl::android::hardware::secure_element::ISecureElement;
 using aidl::android::hardware::secure_element::LogicalChannelResponse;
-using android::base::StringPrintf;
 using ndk::ScopedAStatus;
 using ndk::SharedRefBase;
 using ndk::SpAIBinder;
@@ -64,7 +63,7 @@ class SecureElementCallback : public BnSecureElementCallback {
  public:
   ScopedAStatus onStateChange(bool state,
                               const std::string& in_debugReason) override {
-    std::string connected = state ? "true" : "false";
+    const std::string connected = state ? "true" : "false";
     LOG(INFO) << "connected =" << connected << "reason: " << in_debugReason;
     mConnState = state;
     return ScopedAStatus::ok();
@@ -89,7 +88,7 @@ bool HalToHalTransport::openConnection() {
     return true;
   }
   bool connected = false;
-  SpAIBinder binder =
+  const SpAIBinder binder =
       SpAIBinder(AServiceManager_waitForService(eseHalServiceName));
   mSecureElement = ISecureElement::fromBinder(binder);
   if (mSecureElement == nullptr) {
@@ -111,7 +110,7 @@ bool HalToHalTransport::openConnection() {
   return connected;
 }
 
-bool HalToHalTransport::openChannel(std::vector<uint8_t>& aid,
+bool HalToHalTransport::openChannel(const std::vector<uint8_t>& aid,
                                     int8_t& channel_num,
                                     std::vector<uint8_t>& select_resp) {
   bool retval = false;
@@ -132,7 +131,6 @@ bool HalToHalTransport::openChannel(std::vector<uint8_t>& aid,
 
 bool HalToHalTransport::sendData(const vector<uint8_t>& inData,
                                  vector<uint8_t>& output) {
-  std::vector<uint8_t> cApdu(inData);
   if (!isConnected()) {
     if (!openConnection()) {
       return false;
@@ -152,7 +150,7 @@ bool HalToHalTransport::sendData(const vector<uint8_t>& inData,
 
 bool HalToHalTransport::closeChannel(uint8_t channel_num) {
   LOG(INFO) << "Channel number: " << static_cast<int>(channel_num);
-  auto status = mSecureElement->closeChannel(channel_num);
+  auto status = mSecureElement->closeChannel(static_cast<int8_t>(channel_num));
   if (!status.isOk()) {
     /*
      * reason could be SE reset or HAL deinit triggered from other client

@@ -27,13 +27,13 @@
 #include <sstream>
 #include <vector>
 
-std::vector<uint8_t> card_manager_aid = {0xA0, 0x00, 0x00, 0x01,
-                                         0x51, 0x00, 0x00, 0x00};
+const static std::vector<uint8_t> card_manager_aid = {0xA0, 0x00, 0x00, 0x01,
+                                                      0x51, 0x00, 0x00, 0x00};
 
 // Helper function to safely read a uint32_t from iterator
-bool readUint32(const std::vector<uint8_t>::const_iterator& it,
-                const std::vector<uint8_t>::const_iterator& end,
-                uint32_t& result) {
+static bool readUint32(const std::vector<uint8_t>::const_iterator& it,
+                       const std::vector<uint8_t>::const_iterator& end,
+                       uint32_t& result) {
   if (std::distance(it, end) < 4) {
     LOG(ERROR) << "Insufficient bytes for uint32_t";
     return false;
@@ -65,18 +65,18 @@ bool parseMemoryResponse(const std::vector<uint8_t>& ese_mem_data_all,
   auto end = ese_mem_data_all.cend() - 2;  // ignore status word
 
   it += 2;  // Skip first two bytes (e.g., header)
-  uint16_t mem_tag = (*it++ << 8) | *it++;
+  const uint16_t mem_tag = (*it++ << 8) | *it++;
   if (mem_tag != AVL_MEMORY_TAG) {
     LOG(ERROR) << "Invalid tag: " << std::hex << std::uppercase << mem_tag
                << ", expected 0x" << AVL_MEMORY_TAG;
     return false;
   }
 
-  // Check length (1 byte)
-  uint8_t length = *it++;
+  // Skip length (1 byte)
+  it++;
 
   for (; it != end;) {
-    uint8_t tag = *it++;
+    const uint8_t tag = *it++;
     it++;  // Skip length byte
 
     uint32_t value = 0;
@@ -116,7 +116,7 @@ std::vector<uint8_t> getAvailableMemoryFromSE() {
   if (InitializeConnection() == SESTATUS_OK) {
     std::vector<uint8_t> select_resp;
     int8_t channel_num = -1;
-    SEConnection::getInstance().transport_->openChannel(
+    SEConnection::getInstance().getTransport()->openChannel(
         card_manager_aid, channel_num, select_resp);
 
     if (channel_num != -1) {
@@ -125,7 +125,7 @@ std::vector<uint8_t> getAvailableMemoryFromSE() {
       std::vector<uint8_t> get_avl_memory_cmd = {0x80, 0xCA, 0x00, 0xFE,
                                                  0x02, 0xDF, 0x25};
       get_avl_memory_cmd[0] |= channel_num;
-      auto status = SEConnection::getInstance().transport_->sendData(
+      auto status = SEConnection::getInstance().getTransport()->sendData(
           get_avl_memory_cmd, get_avl_memory_resp);
       if (status) {
         // cmd transmitted succesfully
@@ -134,7 +134,7 @@ std::vector<uint8_t> getAvailableMemoryFromSE() {
       } else {
         LOG(ERROR) << "Failed to send GetAvailableMemory C-APDU";
       }
-      SEConnection::getInstance().transport_->closeChannel(channel_num);
+      SEConnection::getInstance().getTransport()->closeChannel(channel_num);
     } else {
       LOG(ERROR) << "Failed to open Channel to to cardManager";
     }
@@ -146,7 +146,7 @@ bool hasSufficientESEMemoryForScript(
     const struct LoadUpdateScriptMetaInfo& current_script) {
   bool result = true;
   struct eSEAvailableMemory ese_memory_parsed = {0};
-  std::vector<uint8_t> ese_memory_data = getAvailableMemoryFromSE();
+  const std::vector<uint8_t> ese_memory_data = getAvailableMemoryFromSE();
 
   // Perform memory check only if getAvailableMemory cmd returns successful resp
   if (!ese_memory_data.empty() &&
@@ -209,7 +209,7 @@ static uint32_t parseForJCOPBaseVersion(
   }
   // Convert ASCII string (hex representation) to decimal
   // jcopRevNum is guaranteed to have valid hex characters
-  uint32_t decimal = std::stoul(ascii_jcopRevNum, nullptr, 16);
+  const uint32_t decimal = std::stoul(ascii_jcopRevNum, nullptr, 16);
 
   return decimal;
 }
@@ -221,7 +221,7 @@ uint32_t getSEOsVersion() {
   if (!jcop_version_cached && InitializeConnection() == SESTATUS_OK) {
     std::vector<uint8_t> select_resp, platform_id_resp;
     int8_t channel_num = -1;
-    SEConnection::getInstance().transport_->openChannel(
+    SEConnection::getInstance().getTransport()->openChannel(
         card_manager_aid, channel_num, select_resp);
 
     if (channel_num != -1) {
@@ -230,7 +230,7 @@ uint32_t getSEOsVersion() {
                                                   0x02, 0xDF, 0x20};
       get_platform_id_cmd[0] |= channel_num;
 
-      auto status = SEConnection::getInstance().transport_->sendData(
+      auto status = SEConnection::getInstance().getTransport()->sendData(
           get_platform_id_cmd, platform_id_resp);
       if (status) {
         jcop_base_rev_number = parseForJCOPBaseVersion(platform_id_resp);
@@ -240,7 +240,7 @@ uint32_t getSEOsVersion() {
       } else {
         LOG(ERROR) << "Failed to send Get JCOP revision C-APDU";
       }
-      SEConnection::getInstance().transport_->closeChannel(channel_num);
+      SEConnection::getInstance().getTransport()->closeChannel(channel_num);
     }
   }
   return jcop_base_rev_number;

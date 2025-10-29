@@ -20,7 +20,7 @@
  *
  *  The original Work has been changed by NXP.
  *
- *  Copyright 2013-2020, 2023 NXP
+ *  Copyright 2013-2020, 2023, 2025 NXP
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -52,11 +52,8 @@ const char alternative_config_path[] = "/data/vendor/nfc/";
 const char alternative_config_path[] = "";
 #endif
 
-#if 1
-const char* transport_config_paths[] = {"/odm/etc/", "/vendor/etc/", "/etc/"};
-#else
-const char* transport_config_paths[] = {"res/"};
-#endif
+static const char* transport_config_paths[] = {"/odm/etc/", "/vendor/etc/",
+                                               "/etc/"};
 const int transport_config_path_size =
     (sizeof(transport_config_paths) / sizeof(transport_config_paths[0]));
 
@@ -86,10 +83,15 @@ size_t readConfigFile(const char* fileName, uint8_t** p_data) {
   if (fd == nullptr) return 0;
 
   fseek(fd, 0L, SEEK_END);
-  const size_t file_size = ftell(fd);
-  rewind(fd);
-  if ((long)file_size < 0) {
-    ALOGE("%s Invalid file size file_size = %zu\n", __func__, file_size);
+  const long file_size = ftell(fd);
+  if (file_size < 0) {
+    ALOGE("%s Invalid file size file_size = %zu errno: %d\n", __func__,
+          file_size, errno);
+    fclose(fd);
+    return 0;
+  }
+  if (fseek(fd, 0, SEEK_SET) != 0) {
+    ALOGE("Failed to rewind file: %s", strerror(errno));
     fclose(fd);
     return 0;
   }
@@ -99,7 +101,7 @@ size_t readConfigFile(const char* fileName, uint8_t** p_data) {
     fclose(fd);
     return 0;
   }
-  size_t read = fread(buffer, file_size, 1, fd);
+  const size_t read = fread(buffer, file_size, 1, fd);
   fclose(fd);
   if (read == 1) {
     *p_data = buffer;
@@ -185,7 +187,7 @@ class CNfcConfig : public vector<const CNfcParam*> {
 ** Returns:     1, if printable, otherwise 0
 **
 *******************************************************************************/
-inline bool isPrintable(char c) {
+static inline bool isPrintable(char c) {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
          (c >= '0' && c <= '9') || c == '/' || c == '_' || c == '-' || c == '.';
 }
@@ -199,7 +201,7 @@ inline bool isPrintable(char c) {
 ** Returns:     true, if numerical digit
 **
 *******************************************************************************/
-inline bool isDigit(char c, int base) {
+static inline bool isDigit(char c, int base) {
   if ('0' <= c && c <= '9') return true;
   if (base == 16) {
     if (('A' <= c && c <= 'F') || ('a' <= c && c <= 'f')) return true;
@@ -216,13 +218,14 @@ inline bool isDigit(char c, int base) {
 ** Returns:     numerical value if decimal or hex char, otherwise 0
 **
 *******************************************************************************/
-inline int getDigitValue(char c, int base) {
+static inline int getDigitValue(char c, int base) {
   if ('0' <= c && c <= '9') return c - '0';
   if (base == 16) {
-    if ('A' <= c && c <= 'F')
+    if ('A' <= c && c <= 'F') {
       return c - 'A' + 10;
-    else if ('a' <= c && c <= 'f')
+    } else if ('a' <= c && c <= 'f') {
       return c - 'a' + 10;
+    }
   }
   return 0;
 }
@@ -237,8 +240,8 @@ inline int getDigitValue(char c, int base) {
 ** Returns:     none
 **
 *******************************************************************************/
-void findConfigFilePathFromTransportConfigPaths(const string& configName,
-                                                string& filePath) {
+static void findConfigFilePathFromTransportConfigPaths(const string& configName,
+                                                       string& filePath) {
   for (int i = 0; i < transport_config_path_size - 1; i++) {
     filePath.assign(transport_config_paths[i]);
     filePath += configName;
@@ -262,7 +265,7 @@ void findConfigFilePathFromTransportConfigPaths(const string& configName,
 **
 *******************************************************************************/
 bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
-  enum {
+  enum : uint8_t {
     BEGIN_LINE = 1,
     TOKEN,
     STR_VALUE,
@@ -273,7 +276,7 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
   };
 
   uint8_t* p_config = nullptr;
-  size_t config_size = readConfigFile(name, &p_config);
+  const size_t config_size = readConfigFile(name, &p_config);
   if (p_config == nullptr) {
     ALOGE("%s Cannot open config file %s\n", __func__, name);
     if (bResetContent) {
@@ -293,22 +296,24 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
   int bflag = 0;
   state = BEGIN_LINE;
 
-  config_crc32_ = sparse_crc32(0, (const void*)p_config, (int)config_size);
+  config_crc32_ = sparse_crc32(0, static_cast<const void*>(p_config),
+                               static_cast<int>(config_size));
   mValidFile = true;
   if (size() > 0) {
-    if (bResetContent)
+    if (bResetContent) {
       clean();
-    else
+    } else {
       moveToList();
+    }
   }
 
   for (size_t offset = 0; offset != config_size; ++offset) {
     c = p_config[offset];
     switch (state & 0xff) {
       case BEGIN_LINE:
-        if (c == '#')
+        if (c == '#') {
           state = END_LINE;
-        else if (isPrintable(c)) {
+        } else if (isPrintable(c)) {
           i = 0;
           token.erase();
           strValue.erase();
@@ -320,18 +325,19 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
         if (c == '=') {
           token.push_back('\0');
           state = BEGIN_QUOTE;
-        } else if (isPrintable(c))
+        } else if (isPrintable(c)) {
           token.push_back(c);
-        else
+        } else {
           state = END_LINE;
+        }
         break;
       case BEGIN_QUOTE:
         if (c == '"') {
           state = STR_VALUE;
           base = 0;
-        } else if (c == '0')
+        } else if (c == '0') {
           state = BEGIN_HEX;
-        else if (isDigit(c, 10)) {
+        } else if (isDigit(c, 10)) {
           state = NUM_VALUE;
           base = 10;
           numValue = getDigitValue(c, base);
@@ -342,8 +348,9 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
           base = 16;
           i = 0;
           Set(IsStringValue);
-        } else
+        } else {
           state = END_LINE;
+        }
         break;
       case BEGIN_HEX:
         if (c == 'x' || c == 'X') {
@@ -380,8 +387,8 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
             int n = (i + 1) / 2;
             while (n-- > 0) {
               numValue = numValue >> (n * 8);
-              unsigned char c = (numValue)&0xFF;
-              strValue.push_back(c);
+              const unsigned char ch = (numValue) & 0xFF;
+              strValue.push_back(ch);
             }
           }
 
@@ -402,10 +409,11 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
             int n = (i + 1) / 2;
             while (n-- > 0) strValue.push_back(((numValue >> (n * 8)) & 0xFF));
           }
-          if (strValue.length() > 0)
+          if (strValue.length() > 0) {
             pParam = new CNfcParam(token.c_str(), strValue);
-          else
+          } else {
             pParam = new CNfcParam(token.c_str(), numValue);
+          }
           add(pParam);
           strValue.erase();
           numValue = 0;
@@ -417,11 +425,14 @@ bool CNfcConfig::readConfig(const char* name, bool bResetContent) {
           state = END_LINE;
           pParam = new CNfcParam(token.c_str(), strValue);
           add(pParam);
-        } else if (isPrintable(c))
+        } else if (isPrintable(c)) {
           strValue.push_back(c);
+        }
         break;
       case END_LINE:
-        if (c == '\n' || c == '\r') state = BEGIN_LINE;
+        if (c == '\n' || c == '\r') {
+          state = BEGIN_LINE;
+        }
         break;
       default:
         break;
@@ -607,8 +618,9 @@ const CNfcParam* CNfcConfig::find(const char* p_name) const {
                        (*it)->numValue());
       }
       return *it;
-    } else
+    } else {
       break;
+    }
   }
   return NULL;
 }
@@ -681,12 +693,14 @@ void CNfcConfig::add(const CNfcParam* pParam) {
   for (list<const CNfcParam*>::iterator it = m_list.begin(),
                                         itEnd = m_list.end();
        it != itEnd; ++it) {
-    if (**it < pParam->c_str()) continue;
-    if (**it == pParam->c_str())
+    if (**it < pParam->c_str()) {
+      continue;
+    }
+    if (**it == pParam->c_str()) {
       m_list.insert(m_list.erase(it), pParam);
-    else
+    } else {
       m_list.insert(it, pParam);
-
+    }
     return;
   }
   m_list.push_back(pParam);
@@ -725,7 +739,7 @@ void CNfcConfig::dump() {
 **
 *******************************************************************************/
 bool CNfcConfig::isAllowed(const char* name) {
-  string token(name);
+  const string token(name);
   bool stat = false;
   if ((token.find("HOST_LISTEN_TECH_MASK") != std::string::npos) ||
       (token.find("UICC_LISTEN_TECH_MASK") != std::string::npos) ||
@@ -753,10 +767,11 @@ bool CNfcConfig::isAllowed(const char* name) {
 void CNfcConfig::moveFromList() {
   if (m_list.size() == 0) return;
 
-  for (list<const CNfcParam *>::iterator it = m_list.begin(),
-                                         itEnd = m_list.end();
-       it != itEnd; ++it)
+  for (list<const CNfcParam*>::iterator it = m_list.begin(),
+                                        itEnd = m_list.end();
+       it != itEnd; ++it) {
     push_back(*it);
+  }
   m_list.clear();
 }
 
@@ -772,8 +787,9 @@ void CNfcConfig::moveFromList() {
 void CNfcConfig::moveToList() {
   if (m_list.size() != 0) m_list.clear();
 
-  for (iterator it = begin(), itEnd = end(); it != itEnd; ++it)
+  for (iterator it = begin(), itEnd = end(); it != itEnd; ++it) {
     m_list.push_back(*it);
+  }
   clear();
 }
 
@@ -999,7 +1015,7 @@ void readOptionalConfig(const char* extra) {
 *******************************************************************************/
 extern "C" int GetNxpStrValue(const char* name, char* pValue,
                               unsigned long len) {
-  CNfcConfig& rConfig = CNfcConfig::GetInstance();
+  const CNfcConfig& rConfig = CNfcConfig::GetInstance();
 
   return rConfig.getValue(name, pValue, len);
 }
@@ -1024,7 +1040,7 @@ extern "C" int GetNxpStrValue(const char* name, char* pValue,
 *******************************************************************************/
 extern "C" int GetNxpByteArrayValue(const char* name, char* pValue,
                                     long bufflen, long* len) {
-  CNfcConfig& rConfig = CNfcConfig::GetInstance();
+  const CNfcConfig& rConfig = CNfcConfig::GetInstance();
 
   return rConfig.getValue(name, pValue, bufflen, len);
 }
@@ -1042,7 +1058,7 @@ extern "C" int GetNxpNumValue(const char* name, void* pValue,
                               unsigned long len) {
   if (!pValue) return false;
 
-  CNfcConfig& rConfig = CNfcConfig::GetInstance();
+  const CNfcConfig& rConfig = CNfcConfig::GetInstance();
   const CNfcParam* pParam = rConfig.find(name);
 
   if (pParam == NULL) return false;
@@ -1056,7 +1072,7 @@ extern "C" int GetNxpNumValue(const char* name, void* pValue,
   }
   switch (len) {
     case sizeof(unsigned long):
-      *(static_cast<unsigned long*>(pValue)) = (unsigned long)v;
+      *(static_cast<unsigned long*>(pValue)) = v;
       break;
     case sizeof(unsigned short):
       *(static_cast<unsigned short*>(pValue)) = (unsigned short)v;

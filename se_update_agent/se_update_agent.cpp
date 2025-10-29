@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
     exit(-1);
   }
 
-  std::string script_dir_path = argv[2];
+  const std::string script_dir_path = argv[2];
 
   if (!strcmp(argv[1], "check-update")) {
     LOG(INFO) << "perform action check-update";
