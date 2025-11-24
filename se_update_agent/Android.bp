@@ -69,9 +69,9 @@ cc_binary {
     ],
 
     include_dirs: [
-        "hardware/nxp/secure_element_extns/inc",
-        "hardware/nxp/secure_element_extns/ls_client/inc",
-        "hardware/nxp/secure_element_extns/se_update_agent/updater_client/inc",
+        "hardware/nxp/secure_element/libese_vendor_extn/inc",
+        "hardware/nxp/secure_element/libese_vendor_extn/ls_client/inc",
+        "hardware/nxp/secure_element/libese_vendor_extn/se_update_agent/updater_client/inc",
     ],
 
     cflags: [
