@@ -45,7 +45,7 @@ cc_binary {
     relative_install_path: "hw",
     init_rc: ["se_update_agent.nxp.rc"],
     vendor: true,
-    //enabled: true,
+    enabled: false,
 
     srcs: [
         "se_update_agent.cpp",

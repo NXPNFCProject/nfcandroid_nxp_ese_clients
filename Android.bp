@@ -18,6 +18,7 @@ cc_library_shared {
     name: "se_extn_client",
     defaults: ["hidl_defaults"],
     proprietary: true,
+    enabled: false,
 
     srcs: [
         "utils/phNxpConfig.cc",
@@ -49,6 +50,7 @@ cc_library_shared {
     name: "jcos_client",
     defaults: ["hidl_defaults"],
     proprietary: true,
+    enabled: false,
 
     srcs: [
         "jcos_client/src/JcDnld.cpp",
@@ -79,6 +81,7 @@ cc_library_shared {
     name: "ls_client",
     defaults: ["hidl_defaults"],
     proprietary: true,
+    enabled: false,
 
     srcs: [
         "ls_client/src/LsClient.cpp",
