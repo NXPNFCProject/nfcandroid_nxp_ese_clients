@@ -65,7 +65,7 @@ cc_binary {
         "libutils",
         "libcutils",
         "se_extn_client",
-        "ls_client",
+        "ls_client_snxx_extn",
     ],
 
     include_dirs: [

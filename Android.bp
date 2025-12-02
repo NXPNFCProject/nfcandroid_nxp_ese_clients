@@ -78,7 +78,7 @@ cc_library_shared {
 
 cc_library_shared {
 
-    name: "ls_client",
+    name: "ls_client_snxx_extn",
     defaults: ["hidl_defaults"],
     proprietary: true,
     enabled: false,
