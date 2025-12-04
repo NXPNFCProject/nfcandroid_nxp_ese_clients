@@ -21,18 +21,14 @@ cc_library_shared {
     enabled: false,
 
     srcs: [
-        "utils/phNxpConfig.cc",
-        "utils/sparse_crc32.cc",
         "src/eSEClientIntf.cc",
         "src/phNxpLog.cc"
     ],
     export_include_dirs: [
      "inc",
-     "utils",
     ],
     local_include_dirs: [
         "inc",
-        "utils",
     ],
     shared_libs: [
         "libbase",
@@ -42,6 +38,7 @@ cc_library_shared {
         "libutils",
         "libdl",
         "libhidlbase",
+        "ese_teq1_nxp_snxxx",
     ],
 }
 
@@ -89,7 +86,6 @@ cc_library_shared {
     ],
     local_include_dirs: [
         "inc",
-        "utils",
         "ls_client/inc",
     ],
     export_include_dirs: [
@@ -105,5 +101,6 @@ cc_library_shared {
         "libdl",
         "libhidlbase",
         "se_extn_client",
+        "ese_teq1_nxp_snxxx",
     ],
 }

@@ -23,7 +23,7 @@
 #include <android-base/stringprintf.h>
 #include <cutils/log.h>
 #include <dirent.h>
-#include <phNxpConfig.h>
+#include <ese_config.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -96,17 +96,21 @@ uint8_t checkeSEClientRequired(ESE_CLIENT_INTF intf) {
   /*Check if LS update required*/
   isFirstLsUpdate = scriptUpdateRequired(intf);
 
-  if(GetNxpNumValue(NAME_NXP_P61_JCOP_DEFAULT_INTERFACE, &num, sizeof(num))) {
-    seExtn.sJcopUpdateIntferface = num;
+  if (EseConfig::hasKey(NAME_NXP_P61_JCOP_DEFAULT_INTERFACE)) {
+    seExtn.sJcopUpdateIntferface =
+        EseConfig::getUnsignedLong(NAME_NXP_P61_JCOP_DEFAULT_INTERFACE);
   }
-  if(GetNxpNumValue(NAME_NXP_P61_LS_DEFAULT_INTERFACE, &num, sizeof(num))) {
-    seExtn.sLsUpdateIntferface = num;
+  if (EseConfig::hasKey(NAME_NXP_P61_LS_DEFAULT_INTERFACE)) {
+    seExtn.sLsUpdateIntferface =
+        EseConfig::getUnsignedLong(NAME_NXP_P61_LS_DEFAULT_INTERFACE);
   }
-  if(GetNxpNumValue(NAME_NXP_LS_FORCE_UPDATE_REQUIRED, &num, sizeof(num))) {
-    seExtn.isLSUpdateRequired = num;
+  if (EseConfig::hasKey(NAME_NXP_LS_FORCE_UPDATE_REQUIRED)) {
+    seExtn.isLSUpdateRequired =
+        EseConfig::getUnsigned(NAME_NXP_LS_FORCE_UPDATE_REQUIRED);
   }
-  if(GetNxpNumValue(NAME_NXP_JCOP_FORCE_UPDATE_REQUIRED, &num, sizeof(num))) {
-    seExtn.isJcopUpdateRequired = num;
+  if (EseConfig::hasKey(NAME_NXP_JCOP_FORCE_UPDATE_REQUIRED)) {
+    seExtn.isJcopUpdateRequired =
+        EseConfig::getUnsigned(NAME_NXP_JCOP_FORCE_UPDATE_REQUIRED);
   }
   if(isApduPresent && seExtn.sJcopUpdateIntferface &&
     ((isSystemImgUpdated && (intf == seExtn.sJcopUpdateIntferface))
@@ -256,13 +260,15 @@ void setLsUpdateRequired(uint8_t  state)
   seExtn.isLSUpdateRequired = state;
 }
 
-bool geteSETerminalId(char* val)
-{
+bool geteSETerminalId(char* val) {
   bool ret = false;
 
-  if(GetNxpStrValue(NAME_NXP_SPI_SE_TERMINAL_NUM, val, TERMINAL_LEN))
-  {
-    LOG(ERROR) <<"eSETerminalId found";
+  if (EseConfig::hasKey(NAME_NXP_SPI_SE_TERMINAL_NUM)) {
+    LOG(ERROR) << "eSETerminalId found";
+    std::string s = EseConfig::getString(NAME_NXP_SPI_SE_TERMINAL_NUM);
+    std::vector<char> buf(s.begin(),s.end());
+    buf.push_back('\0');
+    val = buf.data();
     ALOGE("eSETerminalId found val = %s ", val);
 
     ret = true;
@@ -270,44 +276,51 @@ bool geteSETerminalId(char* val)
   return ret;
 }
 
-bool geteUICCTerminalId(char* val)
-{
+bool geteUICCTerminalId(char* val) {
   bool ret = false;
 
-  if(GetNxpStrValue(NAME_NXP_VISO_SE_TERMINAL_NUM, val, TERMINAL_LEN))
-  {
+  if (EseConfig::hasKey(NAME_NXP_VISO_SE_TERMINAL_NUM)) {
+    std::string s = EseConfig::getString(NAME_NXP_VISO_SE_TERMINAL_NUM);
+    std::vector<char> buf(s.begin(),s.end());
+    buf.push_back('\0');
+    val = buf.data();
     ALOGE("eUICCTerminalId found val = %s ", val);
     ret = true;
   }
   return ret;
 }
 
-bool getTruestedSETerminalId(char* val)
-{
+bool getTruestedSETerminalId(char* val) {
   bool ret = false;
 
-  if(GetNxpStrValue(NAME_NXP_TRUSTED_SE_TERMINAL_NUM, val, TERMINAL_LEN))
-  {
-    LOG(INFO) <<"TrustedSE TerminalId found";
+  if (EseConfig::hasKey(NAME_NXP_TRUSTED_SE_TERMINAL_NUM)) {
+    LOG(INFO) << "TrustedSE TerminalId found";
+    std::string s = EseConfig::getString(NAME_NXP_TRUSTED_SE_TERMINAL_NUM);
+    std::vector<char> buf(s.begin(),s.end());
+    buf.push_back('\0');
+    val = buf.data();
     ALOGD("TrustedSE TerminalId found val = %s ", val);
-
     ret = true;
   }
   return ret;
 }
 
-bool getNfcSeTerminalId(char* val)
-{
+bool getNfcSeTerminalId(char* val) {
   bool ret = false;
   unsigned long int num = 0;
 
-  if(GetNxpStrValue(NAME_NXP_NFC_SE_TERMINAL_NUM, val, TERMINAL_LEN))
+  if (EseConfig::hasKey(NAME_NXP_NFC_SE_TERMINAL_NUM))
+    ;
   {
+    std::string s = EseConfig::getString(NAME_NXP_NFC_SE_TERMINAL_NUM);
+    std::vector<char> buf(s.begin(),s.end());
+    buf.push_back('\0');
+    val = buf.data();
     ALOGE("NfcSeTerminalId found val = %s ", val);
-    if(!GetNxpNumValue(NAME_NXP_SE_SMB_TERMINAL_TYPE, &num, sizeof(num))) {
+    if (!EseConfig::hasKey(NAME_NXP_SE_SMB_TERMINAL_TYPE)) {
       ret = true;
     }
-    if(num != 0) {
+    if (num != 0) {
       ret = true;
     }
   }
@@ -316,10 +329,12 @@ bool getNfcSeTerminalId(char* val)
 
 void initialize_debug_enabled_flag() {
   unsigned long num = 0;
-  if (GetNxpNumValue(NAME_NFC_DEBUG_ENABLED, &num, sizeof(num))) {
+  if (EseConfig::hasKey(NAME_NFC_DEBUG_ENABLED)) {
+    num = EseConfig::getUnsigned(NAME_NFC_DEBUG_ENABLED);
     nfc_debug_enabled = (num == 0) ? false : true;
   } else {
-    nfc_debug_enabled = ::android::base::GetBoolProperty("nfc.debug_enabled", false);
+    nfc_debug_enabled =
+        ::android::base::GetBoolProperty("nfc.debug_enabled", false);
   }
   ALOGI("nfc_debug_enabled : %d", nfc_debug_enabled);
 }
