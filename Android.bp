@@ -56,7 +56,6 @@ cc_library_shared {
 
     local_include_dirs: [
         "inc",
-        "utils",
         "jcos_client/inc",
     ],
     export_include_dirs: [
