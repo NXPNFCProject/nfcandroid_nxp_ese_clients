@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #if !defined(NXPLOG__H_INCLUDED)
-#include "ese_config.h"
+#include "phNxpConfig.h"
 #include "phNxpLog.h"
 #endif
 #include <cutils/properties.h>

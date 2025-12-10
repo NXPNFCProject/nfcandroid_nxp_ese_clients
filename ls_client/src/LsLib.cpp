@@ -25,7 +25,7 @@
 #include <unistd.h>
 
 #ifdef NXP_BOOTTIME_UPDATE
-#include <ese_config.h>
+#include <phNxpConfig.h>
 #endif
 
 #undef LOG_TAG
