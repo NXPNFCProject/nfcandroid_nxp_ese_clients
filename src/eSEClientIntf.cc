@@ -310,6 +310,7 @@ bool getNfcSeTerminalId(char* val) {
   unsigned long int num = 0;
 
   if (EseConfig::hasKey(NAME_NXP_NFC_SE_TERMINAL_NUM))
+    ;
   {
     std::string s = EseConfig::getString(NAME_NXP_NFC_SE_TERMINAL_NUM);
     std::vector<char> buf(s.begin(),s.end());
